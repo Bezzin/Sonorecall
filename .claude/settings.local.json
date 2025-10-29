@@ -8,7 +8,9 @@
       "Bash(start \"\" \"c:\\Users\\Nathaniel\\Downloads\\Implementing $100M Money Models to Boost Customer Spend in a Sonography Clinic SaaS.pdf\")",
       "Bash(ls:*)",
       "Bash(npm run build:*)",
-      "Bash(tail:*)"
+      "Bash(tail:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []

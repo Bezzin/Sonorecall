@@ -8,7 +8,11 @@ import {
   ScaledOffer,
   DownsellRule,
   UpgradeCredit,
+  AccountCredit,
+  CreditLedgerEntry,
+  RefundTransaction,
 } from '../types';
+import { ImportMetadata } from './productImport';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'sonorecall_products',
@@ -20,6 +24,10 @@ const STORAGE_KEYS = {
   SCALED_OFFERS: 'sonorecall_scaled_offers',
   DOWNSELL_RULES: 'sonorecall_downsell_rules',
   UPGRADE_CREDITS: 'sonorecall_upgrade_credits',
+  IMPORT_HISTORY: 'sonorecall_import_history',
+  ACCOUNT_CREDITS: 'sonorecall_account_credits',
+  CREDIT_LEDGER: 'sonorecall_credit_ledger',
+  REFUND_TRANSACTIONS: 'sonorecall_refund_transactions',
 } as const;
 
 // Product storage functions
@@ -222,6 +230,102 @@ export const loadUpgradeCredits = (defaultCredits: UpgradeCredit[] = []): Upgrad
     console.error('Failed to load upgrade credits from localStorage:', error);
   }
   return defaultCredits;
+};
+
+// Import history storage functions
+export const saveImportHistory = (history: ImportMetadata[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.IMPORT_HISTORY, JSON.stringify(history));
+  } catch (error) {
+    console.error('Failed to save import history to localStorage:', error);
+  }
+};
+
+export const loadImportHistory = (): ImportMetadata[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.IMPORT_HISTORY);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load import history from localStorage:', error);
+  }
+  return [];
+};
+
+export const addImportRecord = (metadata: ImportMetadata): void => {
+  try {
+    const history = loadImportHistory();
+    history.unshift(metadata); // Add to beginning
+    // Keep only last 10 imports
+    const trimmed = history.slice(0, 10);
+    saveImportHistory(trimmed);
+  } catch (error) {
+    console.error('Failed to add import record:', error);
+  }
+};
+
+// Account credit storage functions
+export const saveAccountCredits = (credits: AccountCredit[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.ACCOUNT_CREDITS, JSON.stringify(credits));
+  } catch (error) {
+    console.error('Failed to save account credits to localStorage:', error);
+  }
+};
+
+export const loadAccountCredits = (): AccountCredit[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.ACCOUNT_CREDITS);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load account credits from localStorage:', error);
+  }
+  return [];
+};
+
+// Credit ledger storage functions
+export const saveCreditLedger = (ledger: CreditLedgerEntry[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CREDIT_LEDGER, JSON.stringify(ledger));
+  } catch (error) {
+    console.error('Failed to save credit ledger to localStorage:', error);
+  }
+};
+
+export const loadCreditLedger = (): CreditLedgerEntry[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.CREDIT_LEDGER);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load credit ledger from localStorage:', error);
+  }
+  return [];
+};
+
+// Refund transaction storage functions
+export const saveRefundTransactions = (refunds: RefundTransaction[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.REFUND_TRANSACTIONS, JSON.stringify(refunds));
+  } catch (error) {
+    console.error('Failed to save refund transactions to localStorage:', error);
+  }
+};
+
+export const loadRefundTransactions = (): RefundTransaction[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.REFUND_TRANSACTIONS);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load refund transactions from localStorage:', error);
+  }
+  return [];
 };
 
 export const clearStorage = (): void => {

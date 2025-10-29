@@ -354,6 +354,69 @@ export interface UpgradeCredit {
   appliedAppointmentId?: number;
 }
 
+// Extended credit system types
+export type CreditSource = 'manual' | 'refund' | 'challenge_refund' | 'win_back' | 'upgrade_incentive' | 'downsell_trial' | 'compensation' | 'promotional';
+export type CreditCategory = 'all' | 'services_only' | 'products_only' | 'packages_only';
+export type CreditLedgerAction = 'issued' | 'applied' | 'expired' | 'revoked' | 'adjusted';
+
+export interface AccountCredit {
+  id: number;
+  patientName: string;
+  amount: number;
+  remainingAmount: number;
+  description: string;
+  source: CreditSource;
+  sourceReference?: string; // e.g., "Appointment #123" or "Refund #456"
+  createdAt: string;
+  createdBy?: string; // Staff member name
+  expiresAt?: string;
+  isActive: boolean;
+  allowedCategories: CreditCategory[];
+  maxPerOrder?: number; // Max amount that can be used per transaction
+  reasonCode: string;
+}
+
+export interface CreditLedgerEntry {
+  id: number;
+  creditId: number;
+  action: CreditLedgerAction;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  appointmentId?: number;
+  refundId?: number;
+  timestamp: string;
+  performedBy?: string; // Staff member or 'system'
+  notes?: string;
+}
+
+export interface RefundTransaction {
+  id: number;
+  appointmentId: number;
+  patientName: string;
+  refundType: 'full' | 'partial';
+  originalAmount: number;
+  refundAmount: number;
+  refundMethod: 'credit' | 'original_payment';
+  reason: string;
+  reasonCategory: 'cancellation' | 'no_show' | 'service_issue' | 'customer_request' | 'clinic_error' | 'other';
+  status: 'pending' | 'processed' | 'cancelled';
+  createdAt: string;
+  processedAt?: string;
+  processedBy?: string;
+  creditId?: number; // If refunded as credit
+  notes?: string;
+}
+
+export interface CustomerCreditBalance {
+  patientName: string;
+  totalCredits: number;
+  availableCredits: number;
+  expiredCredits: number;
+  redeemedCredits: number;
+  pendingExpiry: number; // Amount expiring soon (within 30 days)
+}
+
 export interface AcceptedScaledOffer {
   scaledOfferId: number;
   name: string;
@@ -362,4 +425,121 @@ export interface AcceptedScaledOffer {
   removedFeatures: string[];
   originalPrice: number;
   newPrice: number;
+}
+
+// Membership/Subscription System Types
+export type BillingInterval = 'monthly' | 'quarterly' | 'annually' | 'every_4_weeks';
+export type MembershipStatus = 'active' | 'past_due' | 'cancelled' | 'expired' | 'pending';
+export type MembershipEventType = 'enrolled' | 'renewed' | 'payment_failed' | 'payment_retry' | 'cancelled' | 'fee_charged' | 'bonus_granted' | 'credits_granted' | 'credits_redeemed';
+export type CarryoverRule = 'none' | 'one_period' | 'unlimited';
+
+export interface MembershipPlan {
+  id: number;
+  name: string;
+  description: string;
+  price: number; // Per billing period
+  billingInterval: BillingInterval;
+  minimumTermMonths?: number; // Optional commitment period
+  signupFee: number;
+  cancellationFee: number;
+
+  // Credits & Perks
+  includedCredits: number; // Service credits per period
+  creditCarryoverRule: CarryoverRule;
+  signupBonus?: number; // One-time bonus credits on enrollment
+  perks: string[]; // Array of perk descriptions
+
+  // Discounts
+  prepayDiscountPercentage?: number; // Discount for prepaying full term
+  memberPriceDiscountPercentage?: number; // Discount on services/products
+
+  // Admin
+  active: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PaymentMethod {
+  id: string;
+  type: 'card' | 'bank_account';
+  last4: string;
+  isPrimary: boolean;
+  expiryMonth?: number;
+  expiryYear?: number;
+}
+
+export interface MemberSubscription {
+  id: number;
+  memberId: string; // Unique member identifier
+  patientName: string;
+  planId: number;
+  planName: string;
+  status: MembershipStatus;
+
+  // Billing
+  price: number; // Locked-in price at enrollment
+  billingInterval: BillingInterval;
+  nextRenewalDate: string;
+  enrolledAt: string;
+  cancelledAt?: string;
+  expiresAt?: string; // For cancelled memberships
+
+  // Term & Fees
+  minimumTermMonths?: number;
+  minimumTermEndDate?: string;
+  signupFeePaid: number;
+  signupFeeWaived: boolean;
+  prepaidUntil?: string; // If prepaid
+
+  // Credits
+  currentPeriodCredits: number; // Remaining credits this period
+  totalCreditsGranted: number; // Lifetime total
+  totalCreditsRedeemed: number; // Lifetime redeemed
+  carriedOverCredits: number; // Credits carried from previous period
+
+  // Payment
+  paymentMethods: PaymentMethod[];
+  failedPaymentCount: number;
+  lastPaymentDate?: string;
+  lastPaymentStatus?: 'success' | 'failed' | 'pending';
+
+  // Metadata
+  notes?: string;
+  tags?: string[];
+}
+
+export interface MembershipEvent {
+  id: number;
+  subscriptionId: number;
+  memberId: string;
+  patientName: string;
+  eventType: MembershipEventType;
+
+  // Event details
+  timestamp: string;
+  amount?: number;
+  creditsChanged?: number;
+  description: string;
+
+  // Payment details
+  paymentMethodId?: string;
+  paymentStatus?: 'success' | 'failed' | 'pending';
+  failureReason?: string;
+  retryCount?: number;
+
+  // Metadata
+  performedBy?: string; // Staff member or 'system'
+  notes?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface MembershipCreditBalance {
+  memberId: string;
+  patientName: string;
+  planName: string;
+  currentPeriodCredits: number;
+  carriedOverCredits: number;
+  totalAvailableCredits: number;
+  nextRenewalDate: string;
+  creditsWillExpire?: number; // Credits that will expire if not used
 }
