@@ -10,7 +10,12 @@
       "Bash(npm run build:*)",
       "Bash(tail:*)",
       "Bash(find:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Read(//c//**)",
+      "Bash(head:*)",
+      "Bash(awk:*)",
+      "Bash(sed:*)",
+      "Bash(cp:*)"
     ],
     "deny": [],
     "ask": []

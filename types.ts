@@ -1,4 +1,4 @@
-export interface Patient {
+﻿export interface Patient {
   id: number;
   name: string;
   phone: string;
@@ -200,7 +200,7 @@ export interface UpsellRule {
   originalPrice?: number;
   discountedPrice?: number;
   discountPercentage?: number;
-  incrementalPrice?: number; // "Just £X more"
+  incrementalPrice?: number; // "Just ┬úX more"
 
   // Display
   headline: string;
@@ -542,4 +542,398 @@ export interface MembershipCreditBalance {
   totalAvailableCredits: number;
   nextRenewalDate: string;
   creditsWillExpire?: number; // Credits that will expire if not used
+}
+
+export type MembershipPlanInput = Omit<MembershipPlan, 'id' | 'createdAt' | 'updatedAt'> & {
+  id?: number;
+};
+
+export type MembershipEnrollmentPayload = {
+  patientName: string;
+  memberId?: string;
+  planId: number;
+  primaryPaymentMethod: PaymentMethod;
+  secondaryPaymentMethod?: PaymentMethod;
+  commitToMinimumTerm?: boolean;
+  prepayPeriods?: number;
+  notes?: string;
+  tags?: string[];
+  performedBy?: string;
+};
+
+export type MembershipPaymentAttemptOptions = {
+  subscriptionId: number;
+  outcome: 'success' | 'failed';
+  paymentMethodId?: string;
+  amountOverride?: number;
+  notes?: string;
+  performedBy?: string;
+  retry?: boolean;
+};
+
+export type MembershipCancellationPayload = {
+  subscriptionId: number;
+  waiveFee?: boolean;
+  reason?: string;
+  notes?: string;
+  performedBy?: string;
+  cancellationDate?: string;
+  refundIssued?: boolean;
+};
+
+// Referral Program Types
+export type ReferralIncentiveType = 'percentage_discount' | 'fixed_discount' | 'account_credit' | 'free_product' | 'free_service';
+
+export interface ReferralProgramConfig {
+  id: number;
+  enabled: boolean;
+  name: string;
+  description: string;
+  // Referee (new customer) incentive
+  refereeIncentiveType: ReferralIncentiveType;
+  refereeIncentiveValue: number; // percentage or fixed amount
+  refereeIncentiveProductId?: number; // for free product
+  refereeIncentiveServiceName?: string; // for free service
+  refereeMinimumPurchase?: number; // minimum purchase to qualify
+  // Referrer (existing customer) reward
+  referrerRewardType: ReferralIncentiveType;
+  referrerRewardValue: number;
+  referrerRewardProductId?: number;
+  referrerRewardServiceName?: string;
+  // Limits and rules
+  maxUsesPerReferee: number; // how many times a referee can use referral codes (usually 1)
+  maxRewardsPerReferrer?: number; // cap on total referrals per referrer
+  requireCompletedPurchase: boolean; // reward only after purchase completes
+  preventSelfReferral: boolean;
+  expiryDays?: number; // code expiry
+  // Fraud prevention
+  minDaysBetweenReferrals?: number; // prevent rapid-fire referrals
+  requireUniqueEmail: boolean;
+  requireUniquePhone: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerReferralCode {
+  id: number;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  referralCode: string; // unique code (e.g., "SARAH25")
+  createdAt: string;
+  expiresAt?: string;
+  active: boolean;
+  totalReferrals: number; // count of successful referrals
+  totalRewardsEarned: number; // monetary value of rewards
+}
+
+export interface ReferralRelationship {
+  id: number;
+  referrerCode: string; // the code used
+  referrerName: string; // who referred
+  refereeName: string; // who was referred
+  refereeEmail?: string;
+  refereePhone?: string;
+  referredAt: string;
+  status: 'pending' | 'completed' | 'rewarded' | 'cancelled' | 'fraud_flagged';
+  // Applied incentives
+  refereeIncentiveApplied?: {
+    type: ReferralIncentiveType;
+    value: number;
+    productId?: number;
+    serviceName?: string;
+  };
+  referrerRewardIssued?: {
+    type: ReferralIncentiveType;
+    value: number;
+    creditId?: number;
+    productId?: number;
+    serviceName?: string;
+  };
+  appointmentId?: number; // linked appointment
+  purchaseAmount?: number;
+  completedAt?: string; // when purchase completed
+  rewardedAt?: string; // when rewards issued
+  fraudChecksPassed: boolean;
+  fraudNotes?: string;
+}
+
+export interface ReferralEvent {
+  id: number;
+  relationshipId: number;
+  type: 'code_generated' | 'code_shared' | 'code_applied' | 'purchase_completed' | 'referee_rewarded' | 'referrer_rewarded' | 'fraud_detected';
+  timestamp: string;
+  data?: any;
+  notes?: string;
+}
+
+export interface ReferralMetrics {
+  totalReferrals: number;
+  completedReferrals: number;
+  pendingReferrals: number;
+  conversionRate: number; // percentage
+  totalRevenue: number; // from referred customers
+  totalCost: number; // total rewards issued
+  roi: number; // return on investment
+  averageOrderValue: number;
+  topReferrers: Array<{
+    name: string;
+    code: string;
+    referrals: number;
+    revenue: number;
+  }>;
+}
+
+export interface ReferralShareOptions {
+  code: string;
+  link: string;
+  message: string;
+}
+
+// CRM Automation Types
+export type CampaignTriggerType =
+  | 'booking_abandonment'
+  | 'lifecycle_pregnancy'
+  | 'lifecycle_time_since_scan'
+  | 'lifecycle_membership_renewal'
+  | 'reactivation_lapsed'
+  | 'post_visit_upsell';
+
+export type CampaignChannel = 'email' | 'sms' | 'both';
+export type CampaignStatus = 'draft' | 'active' | 'paused' | 'archived';
+
+export interface CampaignTriggerConfig {
+  id: number;
+  name: string;
+  description: string;
+  triggerType: CampaignTriggerType;
+  enabled: boolean;
+  channel: CampaignChannel;
+
+  // Timing
+  delayMinutes?: number; // delay after trigger event
+  sendWindowStart: string; // HH:MM (e.g., "09:00")
+  sendWindowEnd: string; // HH:MM (e.g., "18:00")
+
+  // Trigger-specific conditions
+  conditions?: {
+    // For abandonment
+    minCartValue?: number;
+    abandonedForMinutes?: number;
+
+    // For lifecycle pregnancy
+    pregnancyWeeks?: number[];
+
+    // For time since scan
+    daysSinceLastVisit?: number;
+
+    // For membership renewal
+    daysBeforeRenewal?: number;
+
+    // For reactivation
+    minDaysSinceLastVisit?: number;
+    maxDaysSinceLastVisit?: number;
+
+    // For post-visit
+    hoursAfterVisit?: number;
+  };
+
+  // Message content
+  emailSubject?: string;
+  emailTemplate: string; // HTML template with merge fields
+  smsTemplate?: string; // Plain text with merge fields
+
+  // Personalization
+  includeDynamicRecommendations: boolean;
+  maxRecommendations?: number;
+
+  // Suppression rules
+  maxMessagesPerWeek: number;
+  respectQuietHours: boolean;
+  quietHoursStart?: string; // HH:MM (e.g., "22:00")
+  quietHoursEnd?: string; // HH:MM (e.g., "08:00")
+
+  // Retry settings
+  retryFailedSends: boolean;
+  maxRetries?: number;
+  retryDelayMinutes?: number;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignMessage {
+  id: number;
+  campaignTriggerId: number;
+  campaignName: string;
+
+  // Recipient
+  patientName: string;
+  patientEmail?: string;
+  patientPhone?: string;
+
+  // Message details
+  channel: 'email' | 'sms';
+  subject?: string; // for email
+  content: string; // rendered template
+
+  // Trigger context
+  triggerType: CampaignTriggerType;
+  triggeredAt: string;
+  triggerData?: any; // context data (abandoned cart, appointment, etc.)
+
+  // Scheduling
+  scheduledFor: string;
+  sentAt?: string;
+  deliveredAt?: string;
+
+  // Status
+  status: 'queued' | 'sent' | 'delivered' | 'failed' | 'cancelled';
+  failureReason?: string;
+  retryCount: number;
+
+  // Tracking
+  opened?: boolean;
+  openedAt?: string;
+  clicked?: boolean;
+  clickedAt?: string;
+  converted?: boolean; // led to booking or purchase
+  convertedAt?: string;
+  conversionValue?: number; // revenue attributed
+  conversionType?: 'booking' | 'purchase';
+  conversionId?: number; // appointment or order ID
+
+  // Privacy
+  unsubscribed?: boolean;
+  unsubscribedAt?: string;
+}
+
+export interface CampaignMetrics {
+  campaignTriggerId: number;
+  campaignName: string;
+
+  // Volume
+  totalQueued: number;
+  totalSent: number;
+  totalDelivered: number;
+  totalFailed: number;
+
+  // Engagement
+  totalOpened: number;
+  totalClicked: number;
+  openRate: number; // percentage
+  clickRate: number; // percentage
+
+  // Conversion
+  totalConverted: number;
+  conversionRate: number; // percentage
+  totalRevenue: number;
+  averageOrderValue: number;
+
+  // ROI (if we track cost)
+  roi?: number;
+
+  // Time period
+  periodStart: string;
+  periodEnd: string;
+}
+
+export interface CustomerCommunicationPreferences {
+  id: number;
+  patientName: string;
+  patientEmail?: string;
+  patientPhone?: string;
+
+  // Consent
+  emailConsent: boolean;
+  smsConsent: boolean;
+  marketingConsent: boolean;
+
+  // Preferences
+  preferredChannel: 'email' | 'sms' | 'both';
+  quietHoursEnabled: boolean;
+  customQuietHoursStart?: string;
+  customQuietHoursEnd?: string;
+
+  // Opt-outs
+  unsubscribedFromAll: boolean;
+  unsubscribedAt?: string;
+  optOutCampaigns: number[]; // campaign IDs opted out from
+
+  // Frequency cap
+  maxMessagesPerWeek?: number;
+
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignQueueItem {
+  id: number;
+  campaignTriggerId: number;
+  messageId: number;
+  patientName: string;
+  scheduledFor: string;
+  priority: number; // 1-10, higher = more urgent
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  attempts: number;
+  lastAttemptAt?: string;
+  createdAt: string;
+}
+
+// Merge field data for templates
+export interface CampaignMergeData {
+  // Patient data
+  patientName: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+
+  // Pregnancy/lifecycle
+  dueDate?: string;
+  pregnancyWeek?: number;
+  daysPregnant?: number;
+
+  // Visit history
+  lastVisitDate?: string;
+  lastVisitType?: string;
+  daysSinceLastVisit?: number;
+  totalVisits?: number;
+
+  // Membership
+  membershipPlan?: string;
+  renewalDate?: string;
+  daysUntilRenewal?: number;
+  creditsRemaining?: number;
+
+  // Abandoned cart
+  cartTotal?: number;
+  cartItems?: Array<{ name: string; price: number; quantity: number }>;
+  abandonedAt?: string;
+
+  // Recommendations
+  recommendations?: Array<{
+    id: number;
+    name: string;
+    description: string;
+    price: number;
+    discountedPrice?: number;
+    imageUrl?: string;
+    ctaUrl: string;
+  }>;
+
+  // Dynamic content
+  specialOffer?: {
+    title: string;
+    description: string;
+    discount: number;
+    expiresAt: string;
+    ctaUrl: string;
+  };
+
+  // Links
+  bookingUrl: string;
+  unsubscribeUrl: string;
+  preferencesUrl: string;
 }

@@ -1,1410 +1,5 @@
-// FIX: Corrected the React import statement to properly import `useState` and `useEffect`.
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import {
-  Recall,
-  RecallStatus,
-  Conversation,
-  Message,
-  MessageSender,
-  MissedCall,
-  Patient,
-  Appointment,
-  MessageType,
-  ClinicService,
-  Product,
-  AppointmentProduct,
-  Bundle,
-  BXGYRule,
-  AppliedDiscount,
-  CartBundle,
-  UpsellRule,
-  UpsellSuggestion,
-  UpsellTracking,
-  PaymentPlan,
-  ScaledOffer,
-  DownsellRule,
-  DownsellSuggestion,
-  DownsellTracking,
-  DownsellTrigger,
-  SelectedPaymentPlan,
-  UpgradeCredit,
-  AcceptedScaledOffer,
-  DownsellCondition,
-  AccountCredit,
-  CreditLedgerEntry,
-  RefundTransaction,
-  MembershipPlan,
-  MemberSubscription,
-  MembershipEvent,
-  MembershipCreditBalance,
-  MembershipPlanInput,
-  MembershipEnrollmentPayload,
-  MembershipPaymentAttemptOptions,
-  MembershipCancellationPayload,
-  ReferralProgramConfig,
-  CustomerReferralCode,
-  ReferralRelationship,
-  ReferralEvent,
-  CampaignTriggerConfig,
-  CampaignMessage,
-  CustomerCommunicationPreferences,
-  CampaignQueueItem,
-} from './types';
-import {
-  mockUpcomingAppointments,
-  mockRecalls,
-  mockConversations,
-  analyticsData,
-  mockMissedCalls,
-  mockRecentAppointments,
-  mockProducts,
-  mockBundles,
-  mockBXGYRules,
-  mockUpsellRules,
-  mockPaymentPlans,
-  mockScaledOffers,
-  mockDownsellRules,
-  mockUpgradeCredits,
-  mockMembershipPlans,
-  mockMemberSubscriptions,
-  mockMembershipEvents,
-  mockReferralProgramConfig,
-  mockCustomerReferralCodes,
-  mockReferralRelationships,
-  mockReferralEvents,
-  mockCampaignTriggers,
-  mockCampaignMessages,
-  mockCustomerPreferences,
-  mockCampaignQueue,
-} from './constants';
-import { geminiService } from './services/geminiService';
-import { DashboardIcon, RecallIcon, CommsIcon, AnalyticsIcon, SettingsIcon, StarIcon, CalendarIcon, CheckCircleIcon, ErrorIcon, PhotoIcon, VideoIcon, SyncIcon, ProductIcon, GiftIcon } from './components/Icons';
-import {
-  saveProducts,
-  loadProducts,
-  saveAppointments,
-  loadAppointments,
-  saveBundles,
-  loadBundles,
-  saveBXGYRules,
-  loadBXGYRules,
-  saveUpsellRules,
-  loadUpsellRules,
-  savePaymentPlans,
-  loadPaymentPlans,
-  saveScaledOffers,
-  loadScaledOffers,
-  saveDownsellRules,
-  loadDownsellRules,
-  saveUpgradeCredits,
-  loadUpgradeCredits,
-  saveAccountCredits,
-  loadAccountCredits,
-  saveCreditLedger,
-  loadCreditLedger,
-  saveRefundTransactions,
-  loadRefundTransactions,
-  saveMembershipPlans,
-  loadMembershipPlans,
-  saveMemberSubscriptions,
-  loadMemberSubscriptions,
-  saveMembershipEvents,
-  loadMembershipEvents,
-  saveReferralProgramConfig,
-  loadReferralProgramConfig,
-  saveCustomerReferralCodes,
-  loadCustomerReferralCodes,
-  saveReferralRelationships,
-  loadReferralRelationships,
-  saveReferralEvents,
-  loadReferralEvents,
-  saveCampaignTriggers,
-  loadCampaignTriggers,
-  saveCampaignMessages,
-  loadCampaignMessages,
-  saveCustomerPreferences,
-  loadCustomerPreferences,
-  saveCampaignQueue,
-  loadCampaignQueue,
-} from './utils/storage';
-import { evaluateUpsells, buildCartContext } from './utils/upsells';
-import { evaluateDownsells, buildDownsellContext, calculatePaymentSchedule } from './utils/downsells';
-import { getAvailableMembershipCredits } from './utils/memberships';
-import {
-  generateReferralCode,
-  validateReferralCode,
-  performFraudChecks,
-  calculateRefereeIncentive,
-  calculateReferralMetrics,
-  createReferralEvent,
-} from './utils/referrals';
-import MembershipsView from './components/MembershipsView';
-import CRMAutomationView from './components/CRMAutomationView';
-
-type View = 'dashboard' | 'recalls' | 'communications' | 'analytics' | 'media-studio' | 'settings' | 'products' | 'bundles-promotions' | 'memberships' | 'referrals' | 'credit-management' | 'crm-automation';
-type NotificationType = { message: string; type: 'success' | 'error' };
-
-const defaultServices: ClinicService[] = [
-    { name: 'Follow-up Scan', price: '£90' },
-    { name: 'Prenatal Scan (12wk)', price: '£120' },
-    { name: 'Abdominal Scan', price: '£150' },
-    { name: 'Musculoskeletal Scan', price: '£180' },
-];
-
-const formatCurrency = (value: number): string => `£${value.toFixed(2)}`;
-
-const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<View>('dashboard');
-  const [recalls, setRecalls] = useState<Recall[]>(mockRecalls);
-  const [conversations, setConversations] = useState<Conversation[]>(mockConversations);
-  const [selectedConversationId, setSelectedConversationId] = useState<number | null>(conversations.length > 0 ? conversations[0].id : null);
-  const [recentAppointments, setRecentAppointments] = useState<Appointment[]>(mockRecentAppointments);
-  const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>(mockUpcomingAppointments);
-  const [missedCalls, setMissedCalls] = useState<MissedCall[]>(mockMissedCalls);
-  const [clinicServices, setClinicServices] = useState<ClinicService[]>(defaultServices);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [bundles, setBundles] = useState<Bundle[]>([]);
-  const [bxgyRules, setBXGYRules] = useState<BXGYRule[]>([]);
-  const [upsellRules, setUpsellRules] = useState<UpsellRule[]>([]);
-  const [paymentPlans, setPaymentPlans] = useState<PaymentPlan[]>([]);
-  const [scaledOffers, setScaledOffers] = useState<ScaledOffer[]>([]);
-  const [downsellRules, setDownsellRules] = useState<DownsellRule[]>([]);
-  const [upgradeCredits, setUpgradeCredits] = useState<UpgradeCredit[]>([]);
-  const [accountCredits, setAccountCredits] = useState<AccountCredit[]>([]);
-  const [creditLedger, setCreditLedger] = useState<CreditLedgerEntry[]>([]);
-  const [refundTransactions, setRefundTransactions] = useState<RefundTransaction[]>([]);
-  const [membershipPlans, setMembershipPlans] = useState<MembershipPlan[]>([]);
-  const [memberSubscriptions, setMemberSubscriptions] = useState<MemberSubscription[]>([]);
-  const [membershipEvents, setMembershipEvents] = useState<MembershipEvent[]>([]);
-  const [referralProgramConfig, setReferralProgramConfig] = useState<ReferralProgramConfig | null>(null);
-  const [customerReferralCodes, setCustomerReferralCodes] = useState<CustomerReferralCode[]>([]);
-  const [referralRelationships, setReferralRelationships] = useState<ReferralRelationship[]>([]);
-  const [referralEvents, setReferralEvents] = useState<ReferralEvent[]>([]);
-  const [campaignTriggers, setCampaignTriggers] = useState<CampaignTriggerConfig[]>([]);
-  const [campaignMessages, setCampaignMessages] = useState<CampaignMessage[]>([]);
-  const [customerPreferences, setCustomerPreferences] = useState<CustomerCommunicationPreferences[]>([]);
-  const [campaignQueue, setCampaignQueue] = useState<CampaignQueueItem[]>([]);
-
-  const [isFeedbackModalOpen, setFeedbackModalOpen] = useState(false);
-  const [feedbackState, setFeedbackState] = useState<{ appointmentId: number | null; patientName: string | null }>({ appointmentId: null, patientName: null });
-
-  const [isBookingModalOpen, setBookingModalOpen] = useState(false);
-  const [bookingPatientName, setBookingPatientName] = useState<string | null>(null);
-
-  const [isAddProductModalOpen, setAddProductModalOpen] = useState(false);
-  const [isEditProductModalOpen, setEditProductModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-
-  const [isRefundModalOpen, setRefundModalOpen] = useState(false);
-  const [refundingAppointment, setRefundingAppointment] = useState<Appointment | null>(null);
-
-  const [notification, setNotification] = useState<NotificationType | null>(null);
-
-  useEffect(() => {
-    if (notification && notification.type === 'success') {
-        const timer = setTimeout(() => {
-            setNotification(null);
-        }, 3000); // Hide success after 3 seconds
-        return () => clearTimeout(timer);
-    }
-  }, [notification]);
-
-  // Load data from localStorage on mount
-  useEffect(() => {
-    const loadedProducts = loadProducts(mockProducts);
-    setProducts(loadedProducts);
-
-    const loadedBundles = loadBundles(mockBundles);
-    setBundles(loadedBundles);
-
-    const loadedBXGYRules = loadBXGYRules(mockBXGYRules);
-    setBXGYRules(loadedBXGYRules);
-
-    const loadedUpsellRules = loadUpsellRules(mockUpsellRules);
-    setUpsellRules(loadedUpsellRules);
-
-    const loadedPaymentPlans = loadPaymentPlans(mockPaymentPlans);
-    setPaymentPlans(loadedPaymentPlans);
-
-    const loadedScaledOffers = loadScaledOffers(mockScaledOffers);
-    setScaledOffers(loadedScaledOffers);
-
-    const loadedDownsellRules = loadDownsellRules(mockDownsellRules);
-    setDownsellRules(loadedDownsellRules);
-
-    const loadedUpgradeCredits = loadUpgradeCredits(mockUpgradeCredits);
-    setUpgradeCredits(loadedUpgradeCredits);
-
-    const loadedAccountCredits = loadAccountCredits();
-    setAccountCredits(loadedAccountCredits);
-
-    const loadedCreditLedger = loadCreditLedger();
-    setCreditLedger(loadedCreditLedger);
-
-    const loadedRefundTransactions = loadRefundTransactions();
-    setRefundTransactions(loadedRefundTransactions);
-
-    const loadedMembershipPlans = loadMembershipPlans(mockMembershipPlans);
-    setMembershipPlans(loadedMembershipPlans);
-
-    const loadedMemberSubscriptions = loadMemberSubscriptions(mockMemberSubscriptions);
-    setMemberSubscriptions(loadedMemberSubscriptions);
-
-    const loadedMembershipEvents = loadMembershipEvents(mockMembershipEvents);
-    setMembershipEvents(loadedMembershipEvents);
-
-    const loadedReferralConfig = loadReferralProgramConfig(mockReferralProgramConfig);
-    setReferralProgramConfig(loadedReferralConfig);
-
-    const loadedCustomerCodes = loadCustomerReferralCodes(mockCustomerReferralCodes);
-    setCustomerReferralCodes(loadedCustomerCodes);
-
-    const loadedReferralRelationships = loadReferralRelationships(mockReferralRelationships);
-    setReferralRelationships(loadedReferralRelationships);
-
-    const loadedReferralEvents = loadReferralEvents(mockReferralEvents);
-    setReferralEvents(loadedReferralEvents);
-
-    const loadedCampaignTriggers = loadCampaignTriggers(mockCampaignTriggers);
-    setCampaignTriggers(loadedCampaignTriggers);
-
-    const loadedCampaignMessages = loadCampaignMessages(mockCampaignMessages);
-    setCampaignMessages(loadedCampaignMessages);
-
-    const loadedCustomerPreferences = loadCustomerPreferences(mockCustomerPreferences);
-    setCustomerPreferences(loadedCustomerPreferences);
-
-    const loadedCampaignQueue = loadCampaignQueue(mockCampaignQueue);
-    setCampaignQueue(loadedCampaignQueue);
-
-    const loadedAppointments = loadAppointments(mockUpcomingAppointments, mockRecentAppointments);
-    setUpcomingAppointments(loadedAppointments.upcoming);
-    setRecentAppointments(loadedAppointments.recent);
-  }, []);
-
-  // Save products to localStorage whenever they change
-  useEffect(() => {
-    if (products.length > 0) {
-      saveProducts(products);
-    }
-  }, [products]);
-
-  // Save bundles to localStorage whenever they change
-  useEffect(() => {
-    if (bundles.length > 0) {
-      saveBundles(bundles);
-    }
-  }, [bundles]);
-
-  // Save BXGY rules to localStorage whenever they change
-  useEffect(() => {
-    if (bxgyRules.length > 0) {
-      saveBXGYRules(bxgyRules);
-    }
-  }, [bxgyRules]);
-
-  // Save upsell rules to localStorage whenever they change
-  useEffect(() => {
-    if (upsellRules.length > 0) {
-      saveUpsellRules(upsellRules);
-    }
-  }, [upsellRules]);
-
-  useEffect(() => {
-    if (paymentPlans.length > 0) {
-      savePaymentPlans(paymentPlans);
-    }
-  }, [paymentPlans]);
-
-  useEffect(() => {
-    if (scaledOffers.length > 0) {
-      saveScaledOffers(scaledOffers);
-    }
-  }, [scaledOffers]);
-
-  useEffect(() => {
-    if (downsellRules.length > 0) {
-      saveDownsellRules(downsellRules);
-    }
-  }, [downsellRules]);
-
-  useEffect(() => {
-    saveUpgradeCredits(upgradeCredits);
-  }, [upgradeCredits]);
-
-  useEffect(() => {
-    saveAccountCredits(accountCredits);
-  }, [accountCredits]);
-
-  useEffect(() => {
-    saveCreditLedger(creditLedger);
-  }, [creditLedger]);
-
-  useEffect(() => {
-    saveRefundTransactions(refundTransactions);
-  }, [refundTransactions]);
-
-  useEffect(() => {
-    saveMembershipPlans(membershipPlans);
-  }, [membershipPlans]);
-
-  useEffect(() => {
-    saveMemberSubscriptions(memberSubscriptions);
-  }, [memberSubscriptions]);
-
-  useEffect(() => {
-    saveMembershipEvents(membershipEvents);
-  }, [membershipEvents]);
-
-  useEffect(() => {
-    if (referralProgramConfig) {
-      saveReferralProgramConfig(referralProgramConfig);
-    }
-  }, [referralProgramConfig]);
-
-  useEffect(() => {
-    saveCustomerReferralCodes(customerReferralCodes);
-  }, [customerReferralCodes]);
-
-  useEffect(() => {
-    saveReferralRelationships(referralRelationships);
-  }, [referralRelationships]);
-
-  useEffect(() => {
-    saveReferralEvents(referralEvents);
-  }, [referralEvents]);
-
-  useEffect(() => {
-    saveCampaignTriggers(campaignTriggers);
-  }, [campaignTriggers]);
-
-  useEffect(() => {
-    saveCampaignMessages(campaignMessages);
-  }, [campaignMessages]);
-
-  useEffect(() => {
-    saveCustomerPreferences(customerPreferences);
-  }, [customerPreferences]);
-
-  useEffect(() => {
-    saveCampaignQueue(campaignQueue);
-  }, [campaignQueue]);
-
-  // Calculate membership credit balances from subscriptions and plans
-  const membershipCreditBalances = useMemo<MembershipCreditBalance[]>(() => {
-    return memberSubscriptions.map(subscription => {
-      const plan = membershipPlans.find(p => p.id === subscription.planId);
-      const availableCredits = getAvailableMembershipCredits(subscription);
-      return {
-        subscriptionId: subscription.id,
-        patientName: subscription.patientName,
-        planName: plan?.name || 'Unknown Plan',
-        currentPeriodCredits: subscription.currentPeriodCredits,
-        carriedOverCredits: subscription.carriedOverCredits,
-        totalAvailableCredits: availableCredits,
-      };
-    });
-  }, [memberSubscriptions, membershipPlans]);
-
-  // Save appointments to localStorage whenever they change
-  useEffect(() => {
-    saveAppointments(upcomingAppointments, recentAppointments);
-  }, [upcomingAppointments, recentAppointments]);
-
-
-  const handleUpdateRecallStatus = (recallId: number, status: RecallStatus) => {
-    setRecalls(prevRecalls =>
-      prevRecalls.map(recall =>
-        recall.id === recallId ? { ...recall, status: status } : recall
-      )
-    );
-  };
-  
-  const handleContactPatient = (patient: Patient) => {
-    let conversation = conversations.find(c => c.patientName === patient.name);
-    
-    if (!conversation) {
-        const newConversation: Conversation = {
-            id: Date.now(),
-            patientName: patient.name,
-            lastMessage: 'Recall message sent.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            unread: false,
-            messages: [
-                {
-                    id: Date.now(),
-                    sender: MessageSender.System,
-                    type: MessageType.Standard,
-                    text: `Hi ${patient.name.split(' ')[0]}, this is SonoClinic. We noticed you are due for your follow-up scan. Please let us know when you would like to book.`,
-                    timestamp: 'Just now'
-                }
-            ],
-        };
-        setConversations(prev => [newConversation, ...prev]);
-        conversation = newConversation;
-    }
-    
-    setSelectedConversationId(conversation.id);
-    setCurrentView('communications');
-  };
-
-   const handleRecoverMissedCall = async (callId: number, callerNumber: string) => {
-        try {
-            const messageText = await geminiService.generateMissedCallResponse('SonoClinic', callerNumber);
-            const patient = mockRecalls.map(r => r.patient).find(p => p.phone === callerNumber);
-            const identifier = patient ? patient.name : callerNumber;
-            let conversation = conversations.find(c => c.patientName === identifier || c.phoneNumber === callerNumber);
-            const recoveryMessage: Message = { id: Date.now(), sender: MessageSender.System, type: MessageType.Standard, text: messageText, timestamp: 'Just now' };
-            if (conversation) {
-                setConversations(prev => prev.map(c => c.id === conversation.id ? { ...c, messages: [...c.messages, recoveryMessage], lastMessage: "Missed call recovery sent.", timestamp: 'Just now' } : c));
-            } else {
-                const newConversation: Conversation = { id: Date.now(), patientName: identifier, lastMessage: "Missed call recovery sent.", timestamp: 'Just now', messages: [recoveryMessage], phoneNumber: patient ? undefined : callerNumber, unread: false };
-                setConversations(prev => [newConversation, ...prev]);
-                conversation = newConversation;
-            }
-            setMissedCalls(prev => prev.map(call => call.id === callId ? { ...call, status: 'Contacted' } : call));
-            setSelectedConversationId(conversation.id);
-            setCurrentView('communications');
-        } catch (error) {
-            console.error("Gemini API call failed for missed call:", error);
-            setNotification({ message: 'Failed to call the Gemini API. Please try again.', type: 'error' });
-        }
-    };
-  
-  const handleRequestReview = async (appointmentId: number, patientName: string) => {
-      try {
-        const messageText = await geminiService.generateReviewRequest('SonoClinic', patientName);
-        let conversation = conversations.find(c => c.patientName === patientName);
-        const feedbackMessage: Message = { id: Date.now(), sender: MessageSender.System, type: MessageType.FeedbackRequest, text: messageText, timestamp: 'Just now', payload: { appointmentId } };
-        if (conversation) {
-            setConversations(prev => prev.map(c => c.id === conversation.id ? { ...c, messages: [...c.messages, feedbackMessage], lastMessage: "Feedback request sent.", timestamp: 'Just now' } : c));
-        } else {
-            const newConversation: Conversation = { id: Date.now(), patientName, lastMessage: "Feedback request sent.", timestamp: 'Just now', messages: [feedbackMessage], unread: false };
-            setConversations(prev => [newConversation, ...prev]);
-            conversation = newConversation;
-        }
-        setRecentAppointments(prev => prev.map(app => app.id === appointmentId ? { ...app, reviewStatus: 'Requested' } : app));
-        setSelectedConversationId(conversation.id);
-        setCurrentView('communications');
-      } catch(error) {
-        console.error("Gemini API call failed for review request:", error);
-        setNotification({ message: 'Failed to call the Gemini API. Please try again.', type: 'error' });
-      }
-  };
-  
-  const openFeedbackModal = (appointmentId: number, patientName: string) => {
-      setFeedbackState({ appointmentId, patientName });
-      setFeedbackModalOpen(true);
-  };
-
-  const handleFeedbackSubmit = (appointmentId: number, patientName: string, rating: number, feedbackText: string | null) => {
-      const privateNote: Message = {
-          id: Date.now(),
-          sender: MessageSender.System,
-          type: MessageType.PrivateNote,
-          text: `Patient ${patientName} left ${rating}-star feedback for appointment #${appointmentId}.${feedbackText ? `\n\nFeedback: "${feedbackText}"` : ''}\n\nPlease follow up.`,
-          timestamp: 'Just now'
-      };
-      setConversations(prev => prev.map(c => c.patientName === patientName ? { ...c, messages: [...c.messages, privateNote], lastMessage: "Private feedback received.", timestamp: "Just now" } : c));
-      setRecentAppointments(prev => prev.map(app => app.id === appointmentId ? { ...app, reviewStatus: 'Completed' } : app));
-      setFeedbackModalOpen(false);
-  };
-
-  const handleBookAppointment = (
-    patientName: string,
-    date: Date,
-    time: string,
-    serviceType: string,
-    price: number,
-    selectedProducts: AppointmentProduct[],
-    productTotal: number,
-    upsellTracking?: UpsellTracking,
-    bookingMeta?: {
-      downsellTracking?: DownsellTracking;
-      paymentPlan?: SelectedPaymentPlan;
-      finalTotal?: number;
-      originalTotal?: number;
-      scaledOffer?: AcceptedScaledOffer;
-      appliedCredits?: UpgradeCredit[];
-      issuedCredits?: UpgradeCredit[];
-      appliedAccountCredits?: Array<{ creditId: number; amount: number }>;
-      referralRelationshipId?: number;
-    }
-  ) => {
-      const appliedCredits = bookingMeta?.appliedCredits ?? [];
-      const issuedCredits = bookingMeta?.issuedCredits ?? [];
-      const appliedAccountCreditsData = bookingMeta?.appliedAccountCredits ?? [];
-      const originalTotal = bookingMeta?.originalTotal ?? price + productTotal;
-      const finalTotal = bookingMeta?.finalTotal ?? price + productTotal;
-      const totalSavingsValue = Math.max(originalTotal - finalTotal, 0);
-
-      const newAppointment: Appointment = {
-        id: Date.now(),
-        patientName,
-        time,
-        type: serviceType,
-        price,
-        products: selectedProducts.length > 0 ? selectedProducts : undefined,
-        productTotal: selectedProducts.length > 0 ? productTotal : undefined,
-        upsellTracking,
-        downsellTracking: bookingMeta?.downsellTracking,
-        paymentPlan: bookingMeta?.paymentPlan,
-        originalTotal,
-        finalTotal,
-        totalSavings: totalSavingsValue > 0 ? totalSavingsValue : undefined,
-        appliedCredits: appliedCredits.length > 0 ? appliedCredits : undefined,
-        issuedCredits: issuedCredits.length > 0 ? issuedCredits : undefined,
-        scaledOffer: bookingMeta?.scaledOffer,
-        status: 'Confirmed',
-        reviewStatus: 'Pending',
-      };
-
-      setUpcomingAppointments(prev => [...prev, newAppointment].sort((a, b) => a.time.localeCompare(b.time)));
-
-      // Deduct inventory for purchased products
-      if (selectedProducts.length > 0) {
-        setProducts(prevProducts => prevProducts.map(product => {
-          const purchasedProduct = selectedProducts.find(p => p.id === product.id);
-          if (purchasedProduct && product.trackStock) {
-            return {
-              ...product,
-              stockLevel: product.stockLevel - purchasedProduct.quantity,
-            };
-          }
-          return product;
-        }));
-      }
-
-      if (appliedCredits.length > 0 || issuedCredits.length > 0) {
-        setUpgradeCredits(prevCredits => {
-          let updatedCredits = prevCredits.map(credit => {
-            const applied = appliedCredits.find(c => c.id === credit.id);
-            if (applied) {
-              return {
-                ...credit,
-                redeemed: true,
-                appliedAppointmentId: newAppointment.id,
-              };
-            }
-            return credit;
-          });
-
-          const existingIds = new Set(updatedCredits.map(credit => credit.id));
-          issuedCredits.forEach(credit => {
-            if (!existingIds.has(credit.id)) {
-              updatedCredits = [...updatedCredits, credit];
-              existingIds.add(credit.id);
-            }
-          });
-
-          return updatedCredits;
-        });
-      }
-
-      // Apply account credits
-      if (appliedAccountCreditsData.length > 0) {
-        const { applyCredit } = require('./utils/credits');
-        const newLedgerEntries: CreditLedgerEntry[] = [];
-
-        setAccountCredits(prevCredits => {
-          return prevCredits.map(credit => {
-            const application = appliedAccountCreditsData.find(a => a.creditId === credit.id);
-            if (application) {
-              const { updatedCredit, ledgerEntry } = applyCredit(
-                credit,
-                application.amount,
-                newAppointment.id,
-                creditLedger,
-                'System'
-              );
-              newLedgerEntries.push(ledgerEntry);
-              return updatedCredit;
-            }
-            return credit;
-          });
-        });
-
-        // Add new ledger entries
-        setCreditLedger(prev => [...prev, ...newLedgerEntries]);
-      }
-
-      const confirmationMessage: Message = { id: Date.now(), sender: MessageSender.System, type: MessageType.Standard, text: `Appointment Confirmed: ${newAppointment.type} on ${date.toLocaleDateString('en-GB', { month: 'long', day: 'numeric', year: 'numeric' })} at ${time}.`, timestamp: 'Just now' };
-      setConversations(prev => prev.map(c => c.patientName === patientName ? { ...c, messages: [...c.messages, confirmationMessage], lastMessage: "Appointment confirmed.", timestamp: "Just now" } : c));
-
-      // When an appointment is booked, update the status for any matching patient in the recall list.
-      setRecalls(prevRecalls =>
-        prevRecalls.map(recall =>
-          recall.patient.name === patientName && (recall.status === RecallStatus.Due || recall.status === RecallStatus.Contacted)
-            ? { ...recall, status: RecallStatus.Booked }
-            : recall
-        )
-      );
-
-      // Complete referral if there's a relationship
-      if (bookingMeta?.referralRelationshipId) {
-        handleCompleteReferral(bookingMeta.referralRelationshipId, newAppointment.id, finalTotal);
-      }
-
-      setBookingModalOpen(false);
-      setNotification({ message: `Appointment for ${patientName} confirmed! (Total: £${finalTotal.toFixed(2)})`, type: 'success' });
-  };
-  
-  const handleCompleteAppointment = (appointmentId: number) => {
-    let appointmentToMove: Appointment | undefined;
-
-    setUpcomingAppointments(prev => prev.filter(app => {
-        if (app.id === appointmentId) {
-            appointmentToMove = { ...app, status: 'Completed', time: 'Just now' };
-            return false;
-        }
-        return true;
-    }));
-
-    if (appointmentToMove) {
-        setRecentAppointments(prev => [appointmentToMove!, ...prev]);
-        setNotification({ message: `Appointment for ${appointmentToMove!.patientName} marked as complete.`, type: 'success' });
-    }
-  };
-
-  // Product Management Handlers
-  const handleAddProduct = (product: Omit<Product, 'id'>) => {
-    const newProduct: Product = {
-      ...product,
-      id: Date.now(),
-    };
-    setProducts(prev => [...prev, newProduct]);
-    setAddProductModalOpen(false);
-    setNotification({ message: 'Product added successfully!', type: 'success' });
-  };
-
-  const handleEditProduct = (updatedProduct: Product) => {
-    setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-    setEditProductModalOpen(false);
-    setEditingProduct(null);
-    setNotification({ message: 'Product updated successfully!', type: 'success' });
-  };
-
-  const handleToggleProductStatus = (productId: number) => {
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, active: !p.active } : p));
-    setNotification({ message: 'Product status updated!', type: 'success' });
-  };
-
-  // Credit management handlers
-  const handleIssueCredit = (credit: AccountCredit, ledgerEntry: CreditLedgerEntry) => {
-    setAccountCredits(prev => [...prev, credit]);
-    setCreditLedger(prev => [...prev, ledgerEntry]);
-    setNotification({ message: `Credit of ${formatCurrency(credit.amount)} issued to ${credit.patientName}!`, type: 'success' });
-  };
-
-  const handleAdjustCredit = (creditId: number, adjustmentAmount: number, reason: string) => {
-    const { adjustCredit } = require('./utils/credits');
-
-    setAccountCredits(prev => {
-      const credit = prev.find(c => c.id === creditId);
-      if (!credit) return prev;
-
-      const { updatedCredit, ledgerEntry } = adjustCredit(credit, adjustmentAmount, reason, 'Admin', creditLedger);
-
-      setCreditLedger(prevLedger => [...prevLedger, ledgerEntry]);
-
-      return prev.map(c => c.id === creditId ? updatedCredit : c);
-    });
-
-    setNotification({ message: 'Credit adjusted successfully!', type: 'success' });
-  };
-
-  const handleRevokeCredit = (creditId: number, reason: string) => {
-    const { revokeCredit } = require('./utils/credits');
-
-    setAccountCredits(prev => {
-      const credit = prev.find(c => c.id === creditId);
-      if (!credit) return prev;
-
-      const { updatedCredit, ledgerEntry } = revokeCredit(credit, reason, 'Admin', creditLedger);
-
-      setCreditLedger(prevLedger => [...prevLedger, ledgerEntry]);
-
-      return prev.map(c => c.id === creditId ? updatedCredit : c);
-    });
-
-    setNotification({ message: 'Credit revoked successfully!', type: 'success' });
-  };
-
-  const handleProcessRefund = (
-    appointmentId: number,
-    refundAmount: number,
-    reason: string,
-    reasonCategory: RefundTransaction['reasonCategory'],
-    expiryDays?: number
-  ) => {
-    const { processRefundAsCredit } = require('./utils/credits');
-
-    const appointment = [...upcomingAppointments, ...recentAppointments].find(a => a.id === appointmentId);
-    if (!appointment) {
-      setNotification({ message: 'Appointment not found', type: 'error' });
-      return;
-    }
-
-    const { credit, refund, ledgerEntry } = processRefundAsCredit(
-      appointment,
-      refundAmount,
-      reason,
-      reasonCategory,
-      'Admin',
-      {
-        expiryDays,
-        notes: `Refund processed for appointment #${appointmentId}`,
-      }
-    );
-
-    setAccountCredits(prev => [...prev, credit]);
-    setCreditLedger(prev => [...prev, ledgerEntry]);
-    setRefundTransactions(prev => [...prev, refund]);
-
-    setRefundModalOpen(false);
-    setRefundingAppointment(null);
-    setNotification({
-      message: `Refund of ${formatCurrency(refundAmount)} processed as credit for ${appointment.patientName}!`,
-      type: 'success'
-    });
-  };
-
-  const handleUpdateProductStock = (productId: number, newStock: number) => {
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, stockLevel: newStock } : p));
-  };
-
-  const openEditProductModal = (product: Product) => {
-    setEditingProduct(product);
-    setEditProductModalOpen(true);
-  };
-
-  // Bundle Management Handlers
-  const handleToggleBundleStatus = (bundleId: number) => {
-    setBundles(prev => prev.map(b => b.id === bundleId ? { ...b, active: !b.active } : b));
-    setNotification({ message: 'Bundle status updated!', type: 'success' });
-  };
-
-  // BXGY Rule Management Handlers
-  const handleToggleBXGYRuleStatus = (ruleId: number) => {
-    setBXGYRules(prev => prev.map(r => r.id === ruleId ? { ...r, active: !r.active } : r));
-    setNotification({ message: 'Promotion rule status updated!', type: 'success' });
-  };
-
-  // Upsell Rule Management Handlers
-  const handleToggleUpsellRuleStatus = (ruleId: number) => {
-    setUpsellRules(prev => prev.map(r => r.id === ruleId ? { ...r, active: !r.active } : r));
-    setNotification({ message: 'Upsell rule status updated!', type: 'success' });
-  };
-
-  // Downsell & retention management
-  const handleToggleDownsellRuleStatus = (ruleId: number) => {
-    setDownsellRules(prev => prev.map(r => r.id === ruleId ? { ...r, active: !r.active } : r));
-    setNotification({ message: 'Downsell rule status updated!', type: 'success' });
-  };
-
-  const handleTogglePaymentPlanStatus = (planId: number) => {
-    setPaymentPlans(prev => prev.map(plan => plan.id === planId ? { ...plan, active: !plan.active } : plan));
-    setNotification({ message: 'Payment plan status updated!', type: 'success' });
-  };
-
-  const handleToggleScaledOfferStatus = (offerId: number) => {
-    setScaledOffers(prev => prev.map(offer => offer.id === offerId ? { ...offer, active: !offer.active } : offer));
-    setNotification({ message: 'Scaled offer status updated!', type: 'success' });
-  };
-
-  // Membership handler functions
-  const handleSaveMembershipPlan = (planInput: MembershipPlanInput) => {
-    if (planInput.id) {
-      // Update existing plan
-      setMembershipPlans(prev => prev.map(plan =>
-        plan.id === planInput.id ? { ...plan, ...planInput, id: plan.id } : plan
-      ));
-      setNotification({ message: 'Membership plan updated successfully!', type: 'success' });
-    } else {
-      // Create new plan
-      const newPlan: MembershipPlan = {
-        ...planInput,
-        id: Date.now(),
-        active: planInput.active !== undefined ? planInput.active : true,
-      };
-      setMembershipPlans(prev => [...prev, newPlan]);
-      setNotification({ message: 'Membership plan created successfully!', type: 'success' });
-    }
-  };
-
-  const handleToggleMembershipPlanStatus = (planId: number) => {
-    setMembershipPlans(prev => prev.map(plan =>
-      plan.id === planId ? { ...plan, active: !plan.active } : plan
-    ));
-    setNotification({ message: 'Membership plan status updated!', type: 'success' });
-  };
-
-  const handleEnrollMember = (enrollment: MembershipEnrollmentPayload) => {
-    const plan = membershipPlans.find(p => p.id === enrollment.planId);
-    if (!plan) {
-      setNotification({ message: 'Membership plan not found!', type: 'error' });
-      return;
-    }
-
-    // Calculate first renewal date based on billing interval
-    const today = new Date();
-    const nextRenewalDate = new Date(today);
-    switch (plan.billingInterval) {
-      case 'every_4_weeks':
-        nextRenewalDate.setDate(nextRenewalDate.getDate() + 28);
-        break;
-      case 'monthly':
-        nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1);
-        break;
-      case 'quarterly':
-        nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 3);
-        break;
-      case 'annually':
-        nextRenewalDate.setFullYear(nextRenewalDate.getFullYear() + 1);
-        break;
-    }
-
-    // Create new subscription
-    const newSubscription: MemberSubscription = {
-      id: Date.now(),
-      patientName: enrollment.patientName,
-      planId: enrollment.planId,
-      status: 'active',
-      enrolledAt: today.toISOString(),
-      nextRenewalDate: nextRenewalDate.toISOString(),
-      currentPeriodCredits: plan.includedServiceCredits + (plan.signupBonus || 0),
-      carriedOverCredits: 0,
-      cycleNumber: 1,
-      commitmentEndDate: enrollment.minimumTermMonths
-        ? new Date(today.setMonth(today.getMonth() + enrollment.minimumTermMonths)).toISOString()
-        : undefined,
-      paymentMethodId: enrollment.paymentMethodId,
-      backupPaymentMethodId: enrollment.backupPaymentMethodId,
-      signupFeeWaived: enrollment.signupFeeWaived || false,
-    };
-
-    setMemberSubscriptions(prev => [...prev, newSubscription]);
-
-    // Create enrollment event
-    const enrollmentEvent: MembershipEvent = {
-      id: Date.now(),
-      subscriptionId: newSubscription.id,
-      type: 'enrolled',
-      timestamp: today.toISOString(),
-      data: {
-        planId: plan.id,
-        planName: plan.name,
-        signupFee: enrollment.signupFeeWaived ? 0 : (plan.signupFee || 0),
-        signupBonus: plan.signupBonus || 0,
-      },
-    };
-
-    setMembershipEvents(prev => [...prev, enrollmentEvent]);
-    setNotification({ message: `${enrollment.patientName} enrolled successfully!`, type: 'success' });
-  };
-
-  const handleProcessMembershipPayment = (options: MembershipPaymentAttemptOptions) => {
-    const subscription = memberSubscriptions.find(s => s.id === options.subscriptionId);
-    if (!subscription) {
-      setNotification({ message: 'Subscription not found!', type: 'error' });
-      return;
-    }
-
-    const plan = membershipPlans.find(p => p.id === subscription.planId);
-    if (!plan) {
-      setNotification({ message: 'Membership plan not found!', type: 'error' });
-      return;
-    }
-
-    // Create payment event
-    const paymentEvent: MembershipEvent = {
-      id: Date.now(),
-      subscriptionId: subscription.id,
-      type: options.success ? 'renewed' : 'payment_failed',
-      timestamp: new Date().toISOString(),
-      data: {
-        amount: options.amount,
-        paymentMethodId: options.paymentMethodId,
-        failureReason: options.failureReason,
-        retryAttempt: options.retryAttempt,
-      },
-    };
-
-    setMembershipEvents(prev => [...prev, paymentEvent]);
-
-    if (options.success) {
-      // Calculate next renewal date
-      const nextRenewal = new Date(subscription.nextRenewalDate);
-      switch (plan.billingInterval) {
-        case 'every_4_weeks':
-          nextRenewal.setDate(nextRenewal.getDate() + 28);
-          break;
-        case 'monthly':
-          nextRenewal.setMonth(nextRenewal.getMonth() + 1);
-          break;
-        case 'quarterly':
-          nextRenewal.setMonth(nextRenewal.getMonth() + 3);
-          break;
-        case 'annually':
-          nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
-          break;
-      }
-
-      // Apply carryover rules
-      let newCurrentCredits = plan.includedServiceCredits;
-      let newCarriedOver = 0;
-
-      const unusedCredits = subscription.currentPeriodCredits + subscription.carriedOverCredits;
-      if (plan.creditCarryoverRule === 'one_period') {
-        newCarriedOver = Math.min(unusedCredits, plan.includedServiceCredits);
-      } else if (plan.creditCarryoverRule === 'unlimited') {
-        newCarriedOver = unusedCredits;
-      }
-
-      // Update subscription
-      setMemberSubscriptions(prev => prev.map(sub =>
-        sub.id === subscription.id
-          ? {
-              ...sub,
-              status: 'active',
-              nextRenewalDate: nextRenewal.toISOString(),
-              currentPeriodCredits: newCurrentCredits,
-              carriedOverCredits: newCarriedOver,
-              cycleNumber: sub.cycleNumber + 1,
-            }
-          : sub
-      ));
-
-      setNotification({ message: 'Membership renewed successfully!', type: 'success' });
-    } else {
-      // Mark as past_due
-      setMemberSubscriptions(prev => prev.map(sub =>
-        sub.id === subscription.id ? { ...sub, status: 'past_due' } : sub
-      ));
-      setNotification({ message: 'Payment failed - subscription marked past due', type: 'error' });
-    }
-  };
-
-  const handleCancelMembership = (cancellation: MembershipCancellationPayload) => {
-    const subscription = memberSubscriptions.find(s => s.id === cancellation.subscriptionId);
-    if (!subscription) {
-      setNotification({ message: 'Subscription not found!', type: 'error' });
-      return;
-    }
-
-    const plan = membershipPlans.find(p => p.id === subscription.planId);
-    let cancellationFee = 0;
-
-    // Check if early cancellation fee applies
-    if (subscription.commitmentEndDate && plan?.earlyCancellationFee) {
-      const commitmentEnd = new Date(subscription.commitmentEndDate);
-      if (new Date() < commitmentEnd) {
-        cancellationFee = plan.earlyCancellationFee;
-      }
-    }
-
-    // Update subscription status
-    setMemberSubscriptions(prev => prev.map(sub =>
-      sub.id === subscription.id
-        ? { ...sub, status: 'cancelled', cancelledAt: new Date().toISOString() }
-        : sub
-    ));
-
-    // Create cancellation event
-    const cancellationEvent: MembershipEvent = {
-      id: Date.now(),
-      subscriptionId: subscription.id,
-      type: 'cancelled',
-      timestamp: new Date().toISOString(),
-      data: {
-        reason: cancellation.reason,
-        cancellationFee,
-        refundIssued: cancellation.refundIssued,
-      },
-    };
-
-    setMembershipEvents(prev => [...prev, cancellationEvent]);
-    setNotification({
-      message: `Membership cancelled${cancellationFee > 0 ? ` (cancellation fee: ${formatCurrency(cancellationFee)})` : ''}`,
-      type: 'success'
-    });
-  };
-
-  // Referral handler functions
-  const handleUpdateReferralConfig = (config: ReferralProgramConfig) => {
-    setReferralProgramConfig(config);
-    setNotification({ message: 'Referral program updated successfully!', type: 'success' });
-  };
-
-  const handleGenerateReferralCode = (customerName: string, customerEmail?: string, customerPhone?: string) => {
-    const code = generateReferralCode(customerName);
-    const newReferralCode: CustomerReferralCode = {
-      id: Date.now(),
-      customerName,
-      customerEmail,
-      customerPhone,
-      referralCode: code,
-      createdAt: new Date().toISOString(),
-      expiresAt: referralProgramConfig?.expiryDays
-        ? new Date(Date.now() + referralProgramConfig.expiryDays * 24 * 60 * 60 * 1000).toISOString()
-        : undefined,
-      active: true,
-      totalReferrals: 0,
-      totalRewardsEarned: 0,
-    };
-
-    setCustomerReferralCodes(prev => [...prev, newReferralCode]);
-    setNotification({ message: `Referral code ${code} created!`, type: 'success' });
-    return newReferralCode;
-  };
-
-  const handleApplyReferralCode = (
-    code: string,
-    refereeName: string,
-    cartTotal: number,
-    refereeEmail?: string,
-    refereePhone?: string
-  ): { success: boolean; discount: number; message: string; relationship?: ReferralRelationship } => {
-    if (!referralProgramConfig?.enabled) {
-      return { success: false, discount: 0, message: 'Referral program is not active' };
-    }
-
-    const validation = validateReferralCode(code, customerReferralCodes, referralProgramConfig);
-    if (!validation.valid || !validation.referralCode) {
-      return { success: false, discount: 0, message: validation.error || 'Invalid code' };
-    }
-
-    // Fraud checks
-    const fraudCheck = performFraudChecks(
-      validation.referralCode,
-      refereeName,
-      refereeEmail,
-      refereePhone,
-      referralProgramConfig,
-      referralRelationships
-    );
-
-    if (!fraudCheck.passed) {
-      return { success: false, discount: 0, message: fraudCheck.notes || 'Fraud check failed' };
-    }
-
-    // Calculate incentive
-    const incentive = calculateRefereeIncentive(cartTotal, referralProgramConfig);
-    if (!incentive.valid) {
-      return { success: false, discount: 0, message: incentive.message };
-    }
-
-    // Create relationship
-    const relationship: ReferralRelationship = {
-      id: Date.now(),
-      referrerCode: code,
-      referrerName: validation.referralCode.customerName,
-      refereeName,
-      refereeEmail,
-      refereePhone,
-      referredAt: new Date().toISOString(),
-      status: 'pending',
-      refereeIncentiveApplied: {
-        type: referralProgramConfig.refereeIncentiveType,
-        value: incentive.discount,
-      },
-      fraudChecksPassed: true,
-    };
-
-    setReferralRelationships(prev => [...prev, relationship]);
-
-    // Create event
-    const event = createReferralEvent(relationship.id, 'code_applied', { code, discount: incentive.discount });
-    setReferralEvents(prev => [...prev, event]);
-
-    return { success: true, discount: incentive.discount, message: incentive.message, relationship };
-  };
-
-  const handleCompleteReferral = (
-    relationshipId: number,
-    appointmentId: number,
-    purchaseAmount: number
-  ) => {
-    const relationship = referralRelationships.find(r => r.id === relationshipId);
-    if (!relationship || !referralProgramConfig) return;
-
-    // Update relationship
-    setReferralRelationships(prev => prev.map(r =>
-      r.id === relationshipId
-        ? {
-            ...r,
-            status: 'completed',
-            appointmentId,
-            purchaseAmount,
-            completedAt: new Date().toISOString(),
-          }
-        : r
-    ));
-
-    // Create events
-    const purchaseEvent = createReferralEvent(relationshipId, 'purchase_completed', {
-      appointmentId,
-      amount: purchaseAmount,
-    });
-    setReferralEvents(prev => [...prev, purchaseEvent]);
-
-    // Issue referrer reward if configured to do so
-    if (referralProgramConfig.requireCompletedPurchase) {
-      handleIssueReferrerReward(relationshipId);
-    }
-  };
-
-  const handleIssueReferrerReward = (relationshipId: number) => {
-    const relationship = referralRelationships.find(r => r.id === relationshipId);
-    if (!relationship || !referralProgramConfig) return;
-
-    const referrerCode = customerReferralCodes.find(c => c.referralCode === relationship.referrerCode);
-    if (!referrerCode) return;
-
-    // Issue reward based on type
-    if (referralProgramConfig.referrerRewardType === 'account_credit') {
-      // Create account credit
-      const creditId = Date.now();
-      const newCredit: AccountCredit = {
-        id: creditId,
-        patientName: referrerCode.customerName,
-        patientEmail: referrerCode.customerEmail,
-        originalAmount: referralProgramConfig.referrerRewardValue,
-        remainingAmount: referralProgramConfig.referrerRewardValue,
-        source: 'referral',
-        sourceReference: `Referral reward for ${relationship.refereeName}`,
-        issuedAt: new Date().toISOString(),
-        expiresAt: undefined,
-        status: 'active',
-        allowedCategories: ['all'],
-      };
-
-      const ledgerEntry: CreditLedgerEntry = {
-        id: Date.now() + 1,
-        creditId: creditId,
-        type: 'issued',
-        amount: referralProgramConfig.referrerRewardValue,
-        balanceBefore: 0,
-        balanceAfter: referralProgramConfig.referrerRewardValue,
-        timestamp: new Date().toISOString(),
-        performedBy: 'system',
-        notes: 'Referral program reward',
-      };
-
-      setAccountCredits(prev => [...prev, newCredit]);
-      setCreditLedger(prev => [...prev, ledgerEntry]);
-
-      // Update relationship
-      setReferralRelationships(prev => prev.map(r =>
-        r.id === relationshipId
-          ? {
-              ...r,
-              status: 'rewarded',
-              referrerRewardIssued: {
-                type: referralProgramConfig.referrerRewardType,
-                value: referralProgramConfig.referrerRewardValue,
-                creditId: creditId,
-              },
-              rewardedAt: new Date().toISOString(),
-            }
-          : r
-      ));
-
-      // Update referrer code stats
-      setCustomerReferralCodes(prev => prev.map(c =>
-        c.referralCode === relationship.referrerCode
-          ? {
-              ...c,
-              totalReferrals: c.totalReferrals + 1,
-              totalRewardsEarned: c.totalRewardsEarned + referralProgramConfig.referrerRewardValue,
-            }
-          : c
-      ));
-
-      // Create event
-      const rewardEvent = createReferralEvent(relationshipId, 'referrer_rewarded', {
-        creditId: creditId,
-        amount: referralProgramConfig.referrerRewardValue,
-      });
-      setReferralEvents(prev => [...prev, rewardEvent]);
-
-      setNotification({
-        message: `Referral reward of £${referralProgramConfig.referrerRewardValue} issued to ${referrerCode.customerName}`,
-        type: 'success',
-      });
-    }
-  };
-
-  // CRM Automation handler functions
-  const handleUpdateCampaignTrigger = (trigger: CampaignTriggerConfig) => {
-    setCampaignTriggers(prev => prev.map(t => t.id === trigger.id ? trigger : t));
-    setNotification({ message: 'Campaign trigger updated successfully!', type: 'success' });
-  };
-
-  const handleToggleCampaignTriggerStatus = (triggerId: number) => {
-    setCampaignTriggers(prev => prev.map(t =>
-      t.id === triggerId ? { ...t, enabled: !t.enabled } : t
-    ));
-    const trigger = campaignTriggers.find(t => t.id === triggerId);
-    setNotification({
-      message: `Campaign trigger ${trigger?.enabled ? 'disabled' : 'enabled'} successfully!`,
-      type: 'success',
-    });
-  };
-
-  const handleUpdateCustomerPreferences = (preferences: CustomerCommunicationPreferences) => {
-    setCustomerPreferences(prev => prev.map(p => p.id === preferences.id ? preferences : p));
-    setNotification({ message: 'Customer preferences updated successfully!', type: 'success' });
-  };
-
-  const handleRemoveFromCampaignQueue = (queueItemId: number) => {
-    setCampaignQueue(prev => prev.filter(item => item.id !== queueItemId));
-    setNotification({ message: 'Message removed from queue', type: 'success' });
-  };
-
-  const renderView = () => {
-    switch (currentView) {
-      case 'dashboard':
-        return <DashboardView upcomingAppointments={upcomingAppointments} recentAppointments={recentAppointments} missedCalls={missedCalls} onRequestReview={handleRequestReview} onRecoverMissedCall={handleRecoverMissedCall} onCompleteAppointment={handleCompleteAppointment} onRefund={(appointment) => { setRefundingAppointment(appointment); setRefundModalOpen(true); }} />;
-      case 'recalls':
-        return <RecallsView recalls={recalls} onUpdateStatus={handleUpdateRecallStatus} onContactPatient={handleContactPatient} />;
-      case 'communications':
-        return <CommunicationsView conversations={conversations} setConversations={setConversations} selectedConversationId={selectedConversationId} setSelectedConversationId={setSelectedConversationId} onProvideFeedback={openFeedbackModal} onOpenBookingModal={(patientName) => { setBookingPatientName(patientName); setBookingModalOpen(true); }} />;
-      case 'analytics':
-        return <AnalyticsView appointments={[...upcomingAppointments, ...recentAppointments]} />;
-      case 'media-studio':
-        return <MediaStudioView setNotification={setNotification} />;
-      case 'settings':
-        return <SettingsView setNotification={setNotification} onSync={setClinicServices} products={products} onProductsUpdate={setProducts} />;
-      case 'products':
-        return <ProductsView products={products} onAddProduct={() => setAddProductModalOpen(true)} onEditProduct={openEditProductModal} onToggleStatus={handleToggleProductStatus} />;
-      case 'bundles-promotions':
-        return (
-          <BundlesAndPromotionsView
-            bundles={bundles}
-            bxgyRules={bxgyRules}
-            upsellRules={upsellRules}
-            downsellRules={downsellRules}
-            paymentPlans={paymentPlans}
-            scaledOffers={scaledOffers}
-            upgradeCredits={upgradeCredits}
-            products={products}
-            services={clinicServices}
-            onToggleBundleStatus={handleToggleBundleStatus}
-            onToggleRuleStatus={handleToggleBXGYRuleStatus}
-            onToggleUpsellStatus={handleToggleUpsellRuleStatus}
-            onToggleDownsellStatus={handleToggleDownsellRuleStatus}
-            onTogglePaymentPlanStatus={handleTogglePaymentPlanStatus}
-            onToggleScaledOfferStatus={handleToggleScaledOfferStatus}
-          />
-        );
-      case 'memberships':
-        return (
-          <MembershipsView
-            membershipPlans={membershipPlans}
-            memberSubscriptions={memberSubscriptions}
-            membershipEvents={membershipEvents}
-            creditBalances={membershipCreditBalances}
-            onSavePlan={handleSaveMembershipPlan}
-            onTogglePlanStatus={handleToggleMembershipPlanStatus}
-            onEnrollMember={handleEnrollMember}
-            onProcessPaymentAttempt={handleProcessMembershipPayment}
-            onCancelMembership={handleCancelMembership}
-          />
-        );
-      case 'referrals':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800">Referral Program</h2>
-              <p className="text-sm text-gray-600 mt-1">Manage referral codes, track relationships, and analyze performance</p>
-            </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-yellow-800 font-semibold">ReferralsView component will be created next</p>
-              <p className="text-yellow-700 text-sm mt-1">State and handlers are ready. BookingModal integration pending.</p>
-            </div>
-          </div>
-        );
-      case 'credit-management':
-        return (
-          <CreditManagementView
-            accountCredits={accountCredits}
-            creditLedger={creditLedger}
-            refundTransactions={refundTransactions}
-            onIssueCredit={handleIssueCredit}
-            onAdjustCredit={handleAdjustCredit}
-            onRevokeCredit={handleRevokeCredit}
-          />
-        );
-      case 'crm-automation':
-        return (
-          <CRMAutomationView
-            campaignTriggers={campaignTriggers}
-            campaignMessages={campaignMessages}
-            customerPreferences={customerPreferences}
-            campaignQueue={campaignQueue}
-            onUpdateTrigger={handleUpdateCampaignTrigger}
-            onToggleTriggerStatus={handleToggleCampaignTriggerStatus}
-            onUpdatePreferences={handleUpdateCustomerPreferences}
-            onRemoveFromQueue={handleRemoveFromCampaignQueue}
-          />
-        );
-      default:
-        return <DashboardView upcomingAppointments={upcomingAppointments} recentAppointments={recentAppointments} missedCalls={missedCalls} onRequestReview={handleRequestReview} onRecoverMissedCall={handleRecoverMissedCall} onCompleteAppointment={handleCompleteAppointment} onRefund={(appointment) => { setRefundingAppointment(appointment); setRefundModalOpen(true); }} />;
-    }
-  };
-
-  return (
-    <>
-      {notification && <Notification message={notification.message} type={notification.type} onClose={notification.type === 'error' ? () => setNotification(null) : undefined} />}
-      <div className="flex h-screen bg-gray-100 font-sans">
-        <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <Header view={currentView} />
-          <div className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 md:p-8">
-            {renderView()}
-          </div>
-        </main>
-      </div>
-      {isFeedbackModalOpen && feedbackState.appointmentId && feedbackState.patientName && ( <FeedbackModal patientName={feedbackState.patientName} appointmentId={feedbackState.appointmentId} onClose={() => setFeedbackModalOpen(false)} onSubmit={handleFeedbackSubmit} /> )}
-      {isBookingModalOpen && bookingPatientName && (
-        <BookingModal
-          patientName={bookingPatientName}
-          services={clinicServices}
-          products={products}
-          bundles={bundles}
-          upsellRules={upsellRules}
-          paymentPlans={paymentPlans}
-          scaledOffers={scaledOffers}
-          downsellRules={downsellRules}
-          upgradeCredits={upgradeCredits}
-          accountCredits={accountCredits}
-          memberSubscriptions={memberSubscriptions}
-          membershipCreditBalances={membershipCreditBalances}
-          membershipPlans={membershipPlans}
-          referralProgramConfig={referralProgramConfig}
-          customerReferralCodes={customerReferralCodes}
-          onApplyReferralCode={handleApplyReferralCode}
-          onClose={() => setBookingModalOpen(false)}
-          onBook={handleBookAppointment}
-        />
-      )}
-      {isAddProductModalOpen && ( <AddProductModal onClose={() => setAddProductModalOpen(false)} onAdd={handleAddProduct} /> )}
-      {isEditProductModalOpen && editingProduct && ( <EditProductModal product={editingProduct} onClose={() => { setEditProductModalOpen(false); setEditingProduct(null); }} onSave={handleEditProduct} /> )}
-      {isRefundModalOpen && refundingAppointment && (
-        <RefundModal
-          appointment={refundingAppointment}
-          onClose={() => {
-            setRefundModalOpen(false);
-            setRefundingAppointment(null);
-          }}
-          onConfirm={handleProcessRefund}
-        />
-      )}
-    </>
-  );
-};
+﻿// FIX: Corrected the React import statement to properly import `useState` and `useEffect`.
+export default App;
 
 // Notification Component
 const Notification: React.FC<{ message: string; type: 'success' | 'error'; onClose?: () => void; }> = ({ message, type, onClose }) => {
@@ -1434,15 +29,9 @@ const Sidebar: React.FC<{ currentView: View; setCurrentView: (view: View) => voi
     { id: 'products', label: 'Products', icon: <ProductIcon /> },
     { id: 'bundles-promotions', label: 'Bundles & Promos', icon: <GiftIcon /> },
     { id: 'memberships', label: 'Memberships', icon: <StarIcon /> },
-    { id: 'referrals', label: 'Referrals', icon: <GiftIcon /> },
     { id: 'credit-management', label: 'Credits', icon: (
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ) },
-    { id: 'crm-automation', label: 'CRM Automation', icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
       </svg>
     ) },
     { id: 'media-studio', label: 'Media Studio', icon: <PhotoIcon /> },
@@ -1553,7 +142,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ upcomingAppointments, rec
                       {app.products && app.products.length > 0 && (
                         <div className="mt-1 text-xs text-gray-600">
                           <span className="font-semibold">Products:</span>{' '}
-                          {app.products.map(p => `${p.name} (×${p.quantity})`).join(', ')}
+                          {app.products.map(p => `${p.name} (Ã—${p.quantity})`).join(', ')}
                         </div>
                       )}
                       {app.price !== undefined && (
@@ -1616,7 +205,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ upcomingAppointments, rec
                         <div className="text-xs text-gray-500">{app.type}</div>
                         {app.products && app.products.length > 0 && (
                           <div className="text-xs text-gray-500 mt-1">
-                            {app.products.map(p => `${p.name} (×${p.quantity})`).join(', ')}
+                            {app.products.map(p => `${p.name} (Ã—${p.quantity})`).join(', ')}
                           </div>
                         )}
                         {app.price !== undefined && (
@@ -1714,7 +303,7 @@ const DashboardCard: React.FC<{ title: string; value: string; change: string; ch
       <div className="flex items-baseline space-x-2 mt-2">
         <p className="text-3xl font-bold text-gray-800">{value}</p>
         <span className={`flex items-center text-sm font-semibold ${isIncrease ? 'text-green-500' : 'text-red-500'}`}>
-          {isIncrease ? '▲' : '▼'} {change}
+          {isIncrease ? 'â–²' : 'â–¼'} {change}
         </span>
       </div>
     </div>
@@ -1989,7 +578,7 @@ const AnalyticsView: React.FC<{ appointments: Appointment[] }> = ({ appointments
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip formatter={(value: number) => `£${value}`} />
+                    <Tooltip formatter={(value: number) => `Â£${value}`} />
                     <Legend />
                     <Bar dataKey="value" name="Revenue" fill="#8884d8" />
                 </BarChart>
@@ -2413,14 +1002,14 @@ const ImportReviewModal: React.FC<ImportReviewModalProps> = ({ pendingImports, o
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Review Imported Products</h2>
             <p className="text-sm text-gray-600 mt-1">
-              {createCount} new, {updateCount} updates, {skipCount} skipped • {selectedCount} selected
+              {createCount} new, {updateCount} updates, {skipCount} skipped â€¢ {selectedCount} selected
             </p>
           </div>
           <button
             onClick={onCancel}
             className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
           >
-            ×
+            Ã—
           </button>
         </div>
 
@@ -2519,7 +1108,7 @@ const ImportReviewModal: React.FC<ImportReviewModalProps> = ({ pendingImports, o
                         />
                       ) : (
                         <span className="text-gray-700">
-                          £{product.price?.toFixed(2) || '0.00'}
+                          Â£{product.price?.toFixed(2) || '0.00'}
                         </span>
                       )}
                       {item.action === 'update' && item.existingProductId && (
@@ -2603,6 +1192,9 @@ interface BookingModalProps {
     downsellRules: DownsellRule[];
     upgradeCredits: UpgradeCredit[];
     accountCredits: AccountCredit[];
+    memberSubscriptions: MemberSubscription[];
+    membershipCreditBalances: MembershipCreditBalance[];
+    membershipPlans: MembershipPlan[];
     onClose: () => void;
     onBook: (
       patientName: string,
@@ -2638,6 +1230,9 @@ const BookingModal: React.FC<BookingModalProps> = ({
   downsellRules,
   upgradeCredits,
   accountCredits,
+  memberSubscriptions,
+  membershipCreditBalances,
+  membershipPlans,
   onClose,
   onBook,
 }) => {
@@ -2671,6 +1266,77 @@ const BookingModal: React.FC<BookingModalProps> = ({
     // Account credits state
     const [accountCreditsToApply, setAccountCreditsToApply] = useState<Array<{ credit: AccountCredit; amount: number }>>([]);
     const [autoApplyAccountCredits, setAutoApplyAccountCredits] = useState(true);
+
+    // Membership state
+    const patientMemberships = React.useMemo(
+        () =>
+            memberSubscriptions.filter(
+                subscription =>
+                    subscription.patientName === patientName &&
+                    (subscription.status === 'active' || subscription.status === 'past_due')
+            ),
+        [memberSubscriptions, patientName]
+    );
+    const [selectedMembershipId, setSelectedMembershipId] = useState<number | null>(() =>
+        patientMemberships.length === 1 ? patientMemberships[0].id : null
+    );
+    const [membershipCreditsToUse, setMembershipCreditsToUse] = useState<number>(0);
+
+    React.useEffect(() => {
+        if (patientMemberships.length === 0) {
+            if (selectedMembershipId !== null) {
+                setSelectedMembershipId(null);
+            }
+            return;
+        }
+        if (patientMemberships.length === 1) {
+            const onlyMembershipId = patientMemberships[0].id;
+            if (selectedMembershipId !== onlyMembershipId) {
+                setSelectedMembershipId(onlyMembershipId);
+            }
+            return;
+        }
+        if (selectedMembershipId !== null && !patientMemberships.some(sub => sub.id === selectedMembershipId)) {
+            setSelectedMembershipId(patientMemberships[0].id);
+        }
+    }, [patientMemberships, selectedMembershipId]);
+
+    React.useEffect(() => {
+        if (selectedMembershipId === null && membershipCreditsToUse !== 0) {
+            setMembershipCreditsToUse(0);
+        }
+    }, [selectedMembershipId, membershipCreditsToUse]);
+
+    const selectedMembership = React.useMemo(
+        () => patientMemberships.find(subscription => subscription.id === selectedMembershipId) ?? null,
+        [patientMemberships, selectedMembershipId]
+    );
+    const selectedMembershipPlan = React.useMemo(
+        () => (selectedMembership ? membershipPlans.find(plan => plan.id === selectedMembership.planId) ?? null : null),
+        [membershipPlans, selectedMembership]
+    );
+    const selectedMembershipBalance = React.useMemo(
+        () => membershipCreditBalances.find(balance => balance.subscriptionId === selectedMembershipId) ?? null,
+        [membershipCreditBalances, selectedMembershipId]
+    );
+    const availableMembershipCredits = selectedMembershipBalance?.totalAvailableCredits ?? 0;
+    const canRedeemMembership =
+        !!selectedMembership && selectedMembership.status === 'active' && availableMembershipCredits > 0;
+
+    React.useEffect(() => {
+        if (!canRedeemMembership) {
+            if (membershipCreditsToUse !== 0) {
+                setMembershipCreditsToUse(0);
+            }
+            return;
+        }
+        if (membershipCreditsToUse > availableMembershipCredits) {
+            setMembershipCreditsToUse(availableMembershipCredits);
+        }
+        if (membershipCreditsToUse < 0) {
+            setMembershipCreditsToUse(0);
+        }
+    }, [canRedeemMembership, availableMembershipCredits, membershipCreditsToUse]);
 
     const availableTimes = ["09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "02:00 PM", "02:30 PM", "03:00 PM"];
 
@@ -2879,7 +1545,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
             if (currentDownsell.scaledOffer.originalItemType === 'service') {
                 const scaledService: ClinicService = {
                     name: currentDownsell.scaledOffer.name,
-                    price: `£${currentDownsell.scaledOffer.reducedPrice.toFixed(2)}`,
+                    price: `Â£${currentDownsell.scaledOffer.reducedPrice.toFixed(2)}`,
                 };
                 setSelectedService(JSON.stringify(scaledService));
                 setAcceptedScaledOffer({
@@ -2980,7 +1646,14 @@ const BookingModal: React.FC<BookingModalProps> = ({
         .filter((p): p is AppointmentProduct => p !== null);
 
     const productTotal = selectedProductsList.reduce((sum, p) => sum + (p.price * p.quantity), 0);
-    const cartSubtotal = servicePrice + productTotal;
+    const effectiveMembershipCredits = canRedeemMembership
+        ? Math.max(0, Math.min(membershipCreditsToUse, availableMembershipCredits))
+        : 0;
+    const membershipDiscountAmount = canRedeemMembership
+        ? Math.min(servicePrice, effectiveMembershipCredits * servicePrice)
+        : 0;
+    const serviceSubtotalAfterMembership = Math.max(servicePrice - membershipDiscountAmount, 0);
+    const cartSubtotal = serviceSubtotalAfterMembership + productTotal;
 
     const availableCredits = React.useMemo(
         () => upgradeCredits.filter(credit => !credit.redeemed && credit.patientName === patientName),
@@ -3113,16 +1786,27 @@ const BookingModal: React.FC<BookingModalProps> = ({
             ? accountCreditsToApply.map(c => ({ creditId: c.credit.id, amount: c.amount }))
             : undefined;
 
-        const bookingMeta = {
-            downsellTracking,
-            paymentPlan: selectedPaymentPlan ?? undefined,
-            finalTotal,
-            originalTotal,
-            scaledOffer: acceptedScaledOffer ?? undefined,
-            appliedCredits,
-            issuedCredits: creditsToIssue.length > 0 ? creditsToIssue : undefined,
-            appliedAccountCredits: appliedAccountCreditsData,
-        };
+        const membershipRedemptionMeta =
+            effectiveMembershipCredits > 0 && selectedMembership
+                ? {
+                    subscriptionId: selectedMembership.id,
+                    planName: selectedMembership.planName,
+                    creditsUsed: effectiveMembershipCredits,
+                    valueCovered: membershipDiscountAmount,
+                }
+                : undefined;
+
+      const bookingMeta = {
+        downsellTracking,
+        paymentPlan: selectedPaymentPlan ?? undefined,
+        finalTotal,
+        originalTotal,
+        scaledOffer: acceptedScaledOffer ?? undefined,
+        appliedCredits,
+        issuedCredits: creditsToIssue.length > 0 ? creditsToIssue : undefined,
+        appliedAccountCredits: appliedAccountCreditsData,
+        membershipRedemption: membershipRedemptionMeta,
+      };
 
         onBook(
             patientName,
@@ -3227,7 +1911,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                                         <div className="flex-1">
                                             <p className="font-semibold text-gray-800">{product.name}</p>
                                             <p className="text-sm text-gray-600">{product.description}</p>
-                                            <p className="text-sm font-semibold text-blue-600 mt-1">£{product.price.toFixed(2)}</p>
+                                            <p className="text-sm font-semibold text-blue-600 mt-1">Â£{product.price.toFixed(2)}</p>
                                             {product.trackStock && product.stockLevel <= product.reorderPoint && (
                                                 <p className="text-xs text-yellow-700 mt-1">Only {product.stockLevel} left</p>
                                             )}
@@ -3238,7 +1922,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                                                 disabled={quantity === 0}
                                                 className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 font-semibold"
                                             >
-                                                −
+                                                âˆ’
                                             </button>
                                             <span className="w-8 text-center font-semibold">{quantity}</span>
                                             <button
@@ -3260,7 +1944,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                 {currentUpsells.length > 0 && (
                     <div className="mt-6 border-t pt-6">
                         <h3 className="font-semibold text-lg mb-4 text-gray-800 flex items-center gap-2">
-                            <span className="text-blue-600">✨</span>
+                            <span className="text-blue-600">âœ¨</span>
                             You might also like
                         </h3>
                         <div className="space-y-3">
@@ -3282,15 +1966,15 @@ const BookingModal: React.FC<BookingModalProps> = ({
                                             <div className="mt-2 flex items-center gap-3">
                                                 {upsell.savings && upsell.savings > 0 ? (
                                                     <>
-                                                        <span className="text-lg font-bold text-green-600">£{upsell.finalPrice.toFixed(2)}</span>
-                                                        <span className="text-sm text-gray-500 line-through">£{upsell.originalPrice.toFixed(2)}</span>
-                                                        <span className="text-sm font-semibold text-green-600">Save £{upsell.savings.toFixed(2)}</span>
+                                                        <span className="text-lg font-bold text-green-600">Â£{upsell.finalPrice.toFixed(2)}</span>
+                                                        <span className="text-sm text-gray-500 line-through">Â£{upsell.originalPrice.toFixed(2)}</span>
+                                                        <span className="text-sm font-semibold text-green-600">Save Â£{upsell.savings.toFixed(2)}</span>
                                                     </>
                                                 ) : (
-                                                    <span className="text-lg font-bold text-blue-600">£{upsell.finalPrice.toFixed(2)}</span>
+                                                    <span className="text-lg font-bold text-blue-600">Â£{upsell.finalPrice.toFixed(2)}</span>
                                                 )}
                                                 {upsell.incrementalPrice && (
-                                                    <span className="text-sm text-gray-600 italic">Just £{upsell.incrementalPrice.toFixed(2)} more</span>
+                                                    <span className="text-sm text-gray-600 italic">Just Â£{upsell.incrementalPrice.toFixed(2)} more</span>
                                                 )}
                                             </div>
                                         </div>
@@ -3333,19 +2017,19 @@ const BookingModal: React.FC<BookingModalProps> = ({
                                         <p className="text-sm text-gray-700">{currentDownsell.paymentPlan.description}</p>
                                         <div className="mt-3 flex justify-between">
                                             <span className="text-xs uppercase text-gray-500">Due today</span>
-                                            <span className="text-sm font-semibold text-indigo-600">£{currentDownsell.paymentSchedule.dueToday.toFixed(2)}</span>
+                                            <span className="text-sm font-semibold text-indigo-600">Â£{currentDownsell.paymentSchedule.dueToday.toFixed(2)}</span>
                                         </div>
                                         <ul className="mt-2 space-y-1 text-xs text-gray-600">
                                             {currentDownsell.paymentSchedule.installments.map((installment, index) => (
                                                 <li key={`${installment.dueDate}-${index}`} className="flex justify-between">
                                                     <span>{installment.dueDate} ({installment.description})</span>
-                                                    <span>£{installment.amount.toFixed(2)}</span>
+                                                    <span>Â£{installment.amount.toFixed(2)}</span>
                                                 </li>
                                             ))}
                                         </ul>
                                         {currentDownsell.paymentSchedule.processingFee && (
                                             <p className="mt-2 text-xs text-gray-500">
-                                                Includes processing fee of £{currentDownsell.paymentSchedule.processingFee.toFixed(2)}
+                                                Includes processing fee of Â£{currentDownsell.paymentSchedule.processingFee.toFixed(2)}
                                             </p>
                                         )}
                                     </div>
@@ -3355,14 +2039,14 @@ const BookingModal: React.FC<BookingModalProps> = ({
                                         <div className="flex justify-between items-baseline">
                                             <div>
                                                 <p className="text-xs uppercase text-gray-500">New price</p>
-                                                <p className="text-lg font-semibold text-indigo-600">£{(currentDownsell.newPrice ?? currentDownsell.scaledOffer.reducedPrice).toFixed(2)}</p>
+                                                <p className="text-lg font-semibold text-indigo-600">Â£{(currentDownsell.newPrice ?? currentDownsell.scaledOffer.reducedPrice).toFixed(2)}</p>
                                             </div>
                                             {typeof currentDownsell.originalPrice === 'number' && (
                                                 <div className="text-right">
                                                     <p className="text-xs uppercase text-gray-500">Was</p>
-                                                    <p className="text-sm text-gray-500 line-through">£{currentDownsell.originalPrice.toFixed(2)}</p>
+                                                    <p className="text-sm text-gray-500 line-through">Â£{currentDownsell.originalPrice.toFixed(2)}</p>
                                                     {typeof currentDownsell.savings === 'number' && currentDownsell.savings > 0 && (
-                                                        <p className="text-xs font-semibold text-green-600">Save £{currentDownsell.savings.toFixed(2)}</p>
+                                                        <p className="text-xs font-semibold text-green-600">Save Â£{currentDownsell.savings.toFixed(2)}</p>
                                                     )}
                                                 </div>
                                             )}
@@ -3382,7 +2066,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                                 {currentDownsell.offerType === 'trial_credit' && (
                                     <div className="bg-white rounded-lg p-4">
                                         <p className="text-sm text-gray-700">{currentDownsell.trialCreditDescription}</p>
-                                        <p className="mt-2 text-lg font-semibold text-indigo-600">Credit: £{currentDownsell.trialCreditAmount?.toFixed(2)}</p>
+                                        <p className="mt-2 text-lg font-semibold text-indigo-600">Credit: Â£{currentDownsell.trialCreditAmount?.toFixed(2)}</p>
                                     </div>
                                 )}
                             </div>
@@ -3432,13 +2116,13 @@ const BookingModal: React.FC<BookingModalProps> = ({
                             <div className="flex justify-between text-sm text-green-700">
                                 <span>Total available:</span>
                                 <span className="font-semibold">
-                                    £{availableAccountCredits.reduce((sum, c) => sum + c.remainingAmount, 0).toFixed(2)}
+                                    Â£{availableAccountCredits.reduce((sum, c) => sum + c.remainingAmount, 0).toFixed(2)}
                                 </span>
                             </div>
                             {accountCreditsValueApplied > 0 && (
                                 <div className="flex justify-between text-sm text-green-800 font-semibold bg-green-100 px-2 py-1 rounded">
                                     <span>Applying to this booking:</span>
-                                    <span>-£{accountCreditsValueApplied.toFixed(2)}</span>
+                                    <span>-Â£{accountCreditsValueApplied.toFixed(2)}</span>
                                 </div>
                             )}
                         </div>
@@ -3458,16 +2142,16 @@ const BookingModal: React.FC<BookingModalProps> = ({
                                                     <div className="flex-1">
                                                         <div className="font-medium text-gray-800">{credit.description}</div>
                                                         <div className="text-gray-600 mt-1">
-                                                            Available: £{credit.remainingAmount.toFixed(2)}
+                                                            Available: Â£{credit.remainingAmount.toFixed(2)}
                                                             {appliedAmount > 0 && (
                                                                 <span className="ml-2 text-green-600 font-semibold">
-                                                                    (£{appliedAmount.toFixed(2)} applying)
+                                                                    (Â£{appliedAmount.toFixed(2)} applying)
                                                                 </span>
                                                             )}
                                                         </div>
                                                         {credit.expiresAt && (
                                                             <div className={`mt-1 ${expiringSoon ? 'text-yellow-600 font-medium' : 'text-gray-500'}`}>
-                                                                {expiringSoon && '⚠ '}
+                                                                {expiringSoon && 'âš  '}
                                                                 Expires: {new Date(credit.expiresAt).toLocaleDateString('en-GB')}
                                                             </div>
                                                         )}
@@ -3486,8 +2170,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
                     <div className="mt-6 bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-start justify-between">
                         <div>
                             <h3 className="text-sm font-semibold text-indigo-700">{selectedPaymentPlan.planName}</h3>
-                            <p className="text-xs text-indigo-600 mt-1">Due today: £{paymentPlanSchedule.dueToday.toFixed(2)}</p>
-                            <p className="text-xs text-indigo-600">Total over plan: £{paymentPlanSchedule.totalAmount.toFixed(2)}</p>
+                            <p className="text-xs text-indigo-600 mt-1">Due today: Â£{paymentPlanSchedule.dueToday.toFixed(2)}</p>
+                            <p className="text-xs text-indigo-600">Total over plan: Â£{paymentPlanSchedule.totalAmount.toFixed(2)}</p>
                         </div>
                         <button
                             onClick={handleRemovePaymentPlan}
@@ -3500,13 +2184,13 @@ const BookingModal: React.FC<BookingModalProps> = ({
 
                 {creditsValueApplied > 0 && (
                     <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
-                        Applying £{creditsValueApplied.toFixed(2)} credit toward this booking.
+                        Applying Â£{creditsValueApplied.toFixed(2)} credit toward this booking.
                     </div>
                 )}
 
                 {issuedCreditTotal > 0 && (
                     <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-700">
-                        Issue £{issuedCreditTotal.toFixed(2)} credit for future upgrades once this booking is confirmed.
+                        Issue Â£{issuedCreditTotal.toFixed(2)} credit for future upgrades once this booking is confirmed.
                     </div>
                 )}
 
@@ -3514,54 +2198,54 @@ const BookingModal: React.FC<BookingModalProps> = ({
                 <div className="mt-6 border-t pt-6 space-y-2">
                     <div className="flex justify-between text-gray-700">
                         <span>Service:</span>
-                        <span className="font-semibold">£{servicePrice.toFixed(2)}</span>
+                        <span className="font-semibold">Â£{servicePrice.toFixed(2)}</span>
                     </div>
                     {selectedProductsList.length > 0 && (
                         <div className="flex justify-between text-gray-700">
                             <span>Products:</span>
-                            <span className="font-semibold">£{productTotal.toFixed(2)}</span>
+                            <span className="font-semibold">Â£{productTotal.toFixed(2)}</span>
                         </div>
                     )}
                     {scaledOfferSavings > 0 && (
                         <div className="flex justify-between text-sm text-green-700">
                             <span>Scaled offer savings</span>
-                            <span>-£{scaledOfferSavings.toFixed(2)}</span>
+                            <span>-Â£{scaledOfferSavings.toFixed(2)}</span>
                         </div>
                     )}
                     {creditsValueApplied > 0 && (
                         <div className="flex justify-between text-sm text-green-700">
                             <span>Upgrade credits applied</span>
-                            <span>-£{creditsValueApplied.toFixed(2)}</span>
+                            <span>-Â£{creditsValueApplied.toFixed(2)}</span>
                         </div>
                     )}
                     {accountCreditsValueApplied > 0 && (
                         <div className="flex justify-between text-sm text-green-700">
                             <span>Account credits applied</span>
-                            <span>-£{accountCreditsValueApplied.toFixed(2)}</span>
+                            <span>-Â£{accountCreditsValueApplied.toFixed(2)}</span>
                         </div>
                     )}
                     {paymentPlanFee > 0 && (
                         <div className="flex justify-between text-sm text-indigo-600">
                             <span>Payment plan fee</span>
-                            <span>+£{paymentPlanFee.toFixed(2)}</span>
+                            <span>+Â£{paymentPlanFee.toFixed(2)}</span>
                         </div>
                     )}
                     <div className="flex justify-between text-sm text-gray-500">
                         <span>Original total</span>
-                        <span className={totalSavings > 0 ? 'line-through' : ''}>£{originalTotal.toFixed(2)}</span>
+                        <span className={totalSavings > 0 ? 'line-through' : ''}>Â£{originalTotal.toFixed(2)}</span>
                     </div>
                     <div className="border-t pt-2 flex justify-between text-lg font-bold text-gray-800">
                         <span>{selectedPaymentPlan ? 'Total over plan' : 'Total due'}</span>
-                        <span>£{finalTotal.toFixed(2)}</span>
+                        <span>Â£{finalTotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600">
                         <span>Due today</span>
-                        <span className="font-semibold text-gray-800">£{dueToday.toFixed(2)}</span>
+                        <span className="font-semibold text-gray-800">Â£{dueToday.toFixed(2)}</span>
                     </div>
                     {totalSavings > 0 && (
                         <div className="flex justify-between text-sm text-green-600">
                             <span>Total savings</span>
-                            <span>£{totalSavings.toFixed(2)}</span>
+                            <span>Â£{totalSavings.toFixed(2)}</span>
                         </div>
                     )}
                 </div>
@@ -3974,7 +2658,7 @@ const VideoGeneratorView: React.FC<{ setNotification: (notification: Notificatio
                                 <div className="text-center text-gray-500">
                                     <svg className="animate-spin mx-auto h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                     <p className="mt-4 font-semibold">Creating your video...</p>
-                                    <p className="text-sm">This can take a few minutes. ✨</p>
+                                    <p className="text-sm">This can take a few minutes. âœ¨</p>
                                 </div>
                             )}
                             {error && <p className="text-red-500 font-semibold text-center">{error}</p>}
@@ -4083,12 +2767,12 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onE
                             </div>
                           </td>
                           <td className="p-4 text-gray-700">{product.category}</td>
-                          <td className="p-4 text-gray-800 font-semibold">£{product.price.toFixed(2)}</td>
+                          <td className="p-4 text-gray-800 font-semibold">Â£{product.price.toFixed(2)}</td>
                           <td className="p-4">
                             {product.trackStock ? (
                               <span className="text-gray-700">{product.stockLevel} units</span>
                             ) : (
-                              <span className="text-gray-500">—</span>
+                              <span className="text-gray-500">â€”</span>
                             )}
                           </td>
                           <td className="p-4">
@@ -4146,7 +2830,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onE
                           </div>
                         </td>
                         <td className="p-4 text-gray-700">{product.category}</td>
-                        <td className="p-4 text-gray-800 font-semibold">£{product.price.toFixed(2)}</td>
+                        <td className="p-4 text-gray-800 font-semibold">Â£{product.price.toFixed(2)}</td>
                         <td className="p-4">
                           <div className="flex items-center gap-2">
                             <button
@@ -4240,7 +2924,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({ onClose, onAdd }) => 
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Price (£) *</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Price (Â£) *</label>
               <input
                 type="number"
                 step="0.01"
@@ -4389,7 +3073,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({ product, onClose, o
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Price (£) *</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Price (Â£) *</label>
               <input
                 type="number"
                 step="0.01"
@@ -4566,7 +3250,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
       parts.push(`Item #${condition.declinedItemId}`);
     }
 
-    return parts.join(' • ');
+    return parts.join(' â€¢ ');
   };
 
   const activeBundles = bundles.filter(b => b.active);
@@ -4701,7 +3385,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                             {bundle.items.map((item, idx) => (
                               <div key={idx} className="text-sm text-gray-600 flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-gray-400"></span>
-                                {item.quantity}× {item.name} ({item.type === 'service' ? 'Service' : 'Product'})
+                                {item.quantity}Ã— {item.name} ({item.type === 'service' ? 'Service' : 'Product'})
                               </div>
                             ))}
                           </div>
@@ -4710,15 +3394,15 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                           <div className="mt-4 flex items-center gap-4">
                             <div>
                               <p className="text-xs text-gray-500">Original Price</p>
-                              <p className="text-sm font-semibold text-gray-500 line-through">£{pricing.original.toFixed(2)}</p>
+                              <p className="text-sm font-semibold text-gray-500 line-through">Â£{pricing.original.toFixed(2)}</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500">Bundle Price</p>
-                              <p className="text-lg font-bold text-green-600">£{pricing.final.toFixed(2)}</p>
+                              <p className="text-lg font-bold text-green-600">Â£{pricing.final.toFixed(2)}</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500">You Save</p>
-                              <p className="text-sm font-semibold text-green-600">£{pricing.savings.toFixed(2)} ({((pricing.savings / pricing.original) * 100).toFixed(0)}% off)</p>
+                              <p className="text-sm font-semibold text-green-600">Â£{pricing.savings.toFixed(2)} ({((pricing.savings / pricing.original) * 100).toFixed(0)}% off)</p>
                             </div>
                           </div>
                         </div>
@@ -4752,7 +3436,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                         <h4 className="font-semibold text-gray-800">{bundle.name}</h4>
                         <p className="text-sm text-gray-600 mt-1">{bundle.description}</p>
                         <p className="text-sm text-gray-500 mt-2">
-                          Was: £{pricing.original.toFixed(2)} → £{pricing.final.toFixed(2)} (Save £{pricing.savings.toFixed(2)})
+                          Was: Â£{pricing.original.toFixed(2)} â†’ Â£{pricing.final.toFixed(2)} (Save Â£{pricing.savings.toFixed(2)})
                         </p>
                       </div>
                       <button
@@ -4796,7 +3480,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                             <p className="text-gray-700 mt-1">
                               {rule.ruleType === 'free_item' && 'Free Item'}
                               {rule.ruleType === 'percentage_discount' && `${rule.discountValue}% Discount`}
-                              {rule.ruleType === 'fixed_discount' && `£${rule.discountValue} Off`}
+                              {rule.ruleType === 'fixed_discount' && `Â£${rule.discountValue} Off`}
                             </p>
                           </div>
                           <div>
@@ -4819,7 +3503,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                             <strong>Get:</strong> {rule.getQuantity} item
                             {rule.ruleType === 'free_item' && ' FREE'}
                             {rule.ruleType === 'percentage_discount' && ` at ${rule.discountValue}% off`}
-                            {rule.ruleType === 'fixed_discount' && ` for £${rule.discountValue} off each`}
+                            {rule.ruleType === 'fixed_discount' && ` for Â£${rule.discountValue} off each`}
                           </p>
                         </div>
                       </div>
@@ -4919,19 +3603,19 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                           {upsell.conditions.map((condition, idx) => (
                             <div key={idx} className="text-sm text-purple-800">
                               {condition.triggerType === 'service_selected' && (
-                                <span>• Service: {condition.serviceName || `ID ${condition.serviceId}`}</span>
+                                <span>â€¢ Service: {condition.serviceName || `ID ${condition.serviceId}`}</span>
                               )}
                               {condition.triggerType === 'product_selected' && (
-                                <span>• Product: {condition.productId ? `ID ${condition.productId}` : 'Any product'}</span>
+                                <span>â€¢ Product: {condition.productId ? `ID ${condition.productId}` : 'Any product'}</span>
                               )}
                               {condition.triggerType === 'category_selected' && (
-                                <span>• Category: {condition.productCategory}</span>
+                                <span>â€¢ Category: {condition.productCategory}</span>
                               )}
                               {condition.triggerType === 'bundle_selected' && (
-                                <span>• Bundle: {condition.bundleId ? `ID ${condition.bundleId}` : 'Any bundle'}</span>
+                                <span>â€¢ Bundle: {condition.bundleId ? `ID ${condition.bundleId}` : 'Any bundle'}</span>
                               )}
                               {condition.triggerType === 'cart_value' && (
-                                <span>• Cart value ≥ £{condition.minCartValue}</span>
+                                <span>â€¢ Cart value â‰¥ Â£{condition.minCartValue}</span>
                               )}
                             </div>
                           ))}
@@ -4946,9 +3630,9 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                           {(upsell.discountedPrice || upsell.discountPercentage || upsell.incrementalPrice) && (
                             <p className="text-sm text-green-800 mt-1">
                               <strong>Pricing:</strong>{' '}
-                              {upsell.discountedPrice && `£${upsell.discountedPrice.toFixed(2)}`}
+                              {upsell.discountedPrice && `Â£${upsell.discountedPrice.toFixed(2)}`}
                               {upsell.discountPercentage && `${upsell.discountPercentage}% off`}
-                              {upsell.incrementalPrice && `Just £${upsell.incrementalPrice.toFixed(2)} more`}
+                              {upsell.incrementalPrice && `Just Â£${upsell.incrementalPrice.toFixed(2)} more`}
                             </p>
                           )}
                         </div>
@@ -4956,8 +3640,8 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                         {/* Rate Limiting */}
                         {(upsell.maxDisplaysPerSession || upsell.onlyShowOnce) && (
                           <div className="mt-2 text-xs text-gray-600">
-                            {upsell.onlyShowOnce && '• Show only once per session'}
-                            {upsell.maxDisplaysPerSession && ` • Max ${upsell.maxDisplaysPerSession} displays per session`}
+                            {upsell.onlyShowOnce && 'â€¢ Show only once per session'}
+                            {upsell.maxDisplaysPerSession && ` â€¢ Max ${upsell.maxDisplaysPerSession} displays per session`}
                           </div>
                         )}
                       </div>
@@ -4988,7 +3672,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                       <h4 className="font-semibold text-gray-800">{upsell.name}</h4>
                       <p className="text-sm text-gray-600 mt-1">{upsell.description}</p>
                       <p className="text-sm text-gray-500 mt-2">
-                        Offers: {upsell.offeredItemName} • Priority: {upsell.priority}
+                        Offers: {upsell.offeredItemName} â€¢ Priority: {upsell.priority}
                       </p>
                     </div>
                     <button
@@ -5047,7 +3731,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                                 <span>Checkout hesitation (15s timer)</span>
                               )}
                               {condition.triggerType === 'cart_value_threshold' && (
-                                <span>Cart value ≥ £{condition.minCartValue}</span>
+                                <span>Cart value â‰¥ Â£{condition.minCartValue}</span>
                               )}
                             </div>
                           ))}
@@ -5067,7 +3751,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                           )}
                           {downsell.offerType === 'trial_credit' && (
                             <div className="text-sm text-purple-800">
-                              <p><strong>Credit Amount:</strong> £{downsell.trialCreditAmount?.toFixed(2)}</p>
+                              <p><strong>Credit Amount:</strong> Â£{downsell.trialCreditAmount?.toFixed(2)}</p>
                             </div>
                           )}
                           <p className="text-sm text-purple-800 mt-1">
@@ -5078,7 +3762,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                         {/* Caps */}
                         {downsell.maxDisplaysPerEvent && (
                           <div className="mt-2 text-xs text-gray-600">
-                            • Max {downsell.maxDisplaysPerEvent} display per event
+                            â€¢ Max {downsell.maxDisplaysPerEvent} display per event
                           </div>
                         )}
                       </div>
@@ -5109,7 +3793,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                       <h4 className="font-semibold text-gray-800">{downsell.name}</h4>
                       <p className="text-sm text-gray-600 mt-1">{downsell.description}</p>
                       <p className="text-sm text-gray-500 mt-2">
-                        Type: {downsell.offerType} • Priority: {downsell.priority}
+                        Type: {downsell.offerType} â€¢ Priority: {downsell.priority}
                       </p>
                     </div>
                     <button
@@ -5161,7 +3845,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                           </div>
                           <div>
                             <p className="text-xs font-semibold text-gray-700 uppercase">Min Cart Value</p>
-                            <p className="text-sm text-gray-800 font-medium">£{plan.minCartValue?.toFixed(2) || '0.00'}</p>
+                            <p className="text-sm text-gray-800 font-medium">Â£{plan.minCartValue?.toFixed(2) || '0.00'}</p>
                           </div>
                         </div>
 
@@ -5176,7 +3860,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
 
                         {/* Example Calculation */}
                         <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                          <p className="text-xs font-semibold text-gray-700 mb-2">Example for £100 total:</p>
+                          <p className="text-xs font-semibold text-gray-700 mb-2">Example for Â£100 total:</p>
                           {(() => {
                             const totalAmount = 100;
                             const perInstallment = totalAmount / plan.installmentCount;
@@ -5187,13 +3871,13 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                             return (
                               <>
                                 <p className="text-sm text-gray-800">
-                                  {plan.installmentCount}× £{installmentWithFee.toFixed(2)}
+                                  {plan.installmentCount}Ã— Â£{installmentWithFee.toFixed(2)}
                                   {feePerPayment > 0 && (
-                                    <span className="text-xs text-gray-600"> (£{perInstallment.toFixed(2)} + £{feePerPayment.toFixed(2)} fee)</span>
+                                    <span className="text-xs text-gray-600"> (Â£{perInstallment.toFixed(2)} + Â£{feePerPayment.toFixed(2)} fee)</span>
                                   )}
                                 </p>
                                 <p className="text-xs text-gray-600 mt-1">
-                                  Due today: £{installmentWithFee.toFixed(2)} • Total: £{(installmentWithFee * plan.installmentCount).toFixed(2)}
+                                  Due today: Â£{installmentWithFee.toFixed(2)} â€¢ Total: Â£{(installmentWithFee * plan.installmentCount).toFixed(2)}
                                 </p>
                               </>
                             );
@@ -5227,7 +3911,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                       <h4 className="font-semibold text-gray-800">{plan.name}</h4>
                       <p className="text-sm text-gray-600 mt-1">{plan.description}</p>
                       <p className="text-sm text-gray-500 mt-2">
-                        {plan.installmentCount} payments • Min: £{plan.minCartValue?.toFixed(2) || '0.00'}
+                        {plan.installmentCount} payments â€¢ Min: Â£{plan.minCartValue?.toFixed(2) || '0.00'}
                       </p>
                     </div>
                     <button
@@ -5293,15 +3977,15 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                           <div className="mt-3 flex items-center gap-4">
                             <div>
                               <p className="text-xs text-gray-500">Original Price</p>
-                              <p className="text-sm font-semibold text-gray-500 line-through">£{originalPrice.toFixed(2)}</p>
+                              <p className="text-sm font-semibold text-gray-500 line-through">Â£{originalPrice.toFixed(2)}</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500">Scaled Price</p>
-                              <p className="text-lg font-bold text-indigo-600">£{offer.reducedPrice.toFixed(2)}</p>
+                              <p className="text-lg font-bold text-indigo-600">Â£{offer.reducedPrice.toFixed(2)}</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500">Savings</p>
-                              <p className="text-sm font-semibold text-green-600">£{(originalPrice - offer.reducedPrice).toFixed(2)}</p>
+                              <p className="text-sm font-semibold text-green-600">Â£{(originalPrice - offer.reducedPrice).toFixed(2)}</p>
                             </div>
                           </div>
 
@@ -5348,7 +4032,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                       <h4 className="font-semibold text-gray-800">{offer.name}</h4>
                       <p className="text-sm text-gray-600 mt-1">{offer.description}</p>
                       <p className="text-sm text-gray-500 mt-2">
-                        £{offer.reducedPrice.toFixed(2)} • {offer.removedFeatures?.length || 0} features removed
+                        Â£{offer.reducedPrice.toFixed(2)} â€¢ {offer.removedFeatures?.length || 0} features removed
                       </p>
                     </div>
                     <button
@@ -5385,7 +4069,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                         <div className="flex items-center gap-3">
                           <h4 className="text-lg font-semibold text-gray-800">{credit.patientName}</h4>
                           <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700">
-                            £{credit.amount.toFixed(2)}
+                            Â£{credit.amount.toFixed(2)}
                           </span>
                         </div>
 
@@ -5445,7 +4129,7 @@ const BundlesAndPromotionsView: React.FC<BundlesAndPromotionsViewProps> = ({
                         <div className="flex items-center gap-3">
                           <h4 className="font-semibold text-gray-800">{credit.patientName}</h4>
                           <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">
-                            £{credit.amount.toFixed(2)}
+                            Â£{credit.amount.toFixed(2)}
                           </span>
                           <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700">
                             Redeemed
@@ -5553,7 +4237,7 @@ const RefundModal: React.FC<RefundModalProps> = ({ appointment, onClose, onConfi
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Refund Amount (£)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Refund Amount (Â£)</label>
             <input
               type="number"
               step="0.01"
@@ -5755,7 +4439,7 @@ const CreditManagementView: React.FC<CreditManagementViewProps> = ({
                     </div>
                     {balance.pendingExpiry > 0 && (
                       <div className="flex items-center mt-1">
-                        <span className="text-xs text-yellow-600">⚠ {formatCurrency(balance.pendingExpiry)} expiring soon</span>
+                        <span className="text-xs text-yellow-600">âš  {formatCurrency(balance.pendingExpiry)} expiring soon</span>
                       </div>
                     )}
                   </div>
@@ -6110,7 +4794,7 @@ const IssueCreditModal: React.FC<IssueCreditModalProps> = ({ customers, onClose,
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (£)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (Â£)</label>
               <input
                 type="number"
                 step="0.01"
@@ -6173,7 +4857,7 @@ const IssueCreditModal: React.FC<IssueCreditModalProps> = ({ customers, onClose,
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Max Per Order (£)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Max Per Order (Â£)</label>
               <input
                 type="number"
                 step="0.01"
@@ -6335,7 +5019,7 @@ const AdjustCreditModal: React.FC<AdjustCreditModalProps> = ({ credit, onClose, 
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Amount (£)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Amount (Â£)</label>
             <input
               type="number"
               step="0.01"

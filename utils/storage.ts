@@ -11,6 +11,17 @@ import {
   AccountCredit,
   CreditLedgerEntry,
   RefundTransaction,
+  MembershipPlan,
+  MemberSubscription,
+  MembershipEvent,
+  ReferralProgramConfig,
+  CustomerReferralCode,
+  ReferralRelationship,
+  ReferralEvent,
+  CampaignTriggerConfig,
+  CampaignMessage,
+  CustomerCommunicationPreferences,
+  CampaignQueueItem,
 } from '../types';
 import { ImportMetadata } from './productImport';
 
@@ -24,10 +35,21 @@ const STORAGE_KEYS = {
   SCALED_OFFERS: 'sonorecall_scaled_offers',
   DOWNSELL_RULES: 'sonorecall_downsell_rules',
   UPGRADE_CREDITS: 'sonorecall_upgrade_credits',
+  MEMBERSHIP_PLANS: 'sonorecall_membership_plans',
+  MEMBER_SUBSCRIPTIONS: 'sonorecall_member_subscriptions',
+  MEMBERSHIP_EVENTS: 'sonorecall_membership_events',
   IMPORT_HISTORY: 'sonorecall_import_history',
   ACCOUNT_CREDITS: 'sonorecall_account_credits',
   CREDIT_LEDGER: 'sonorecall_credit_ledger',
   REFUND_TRANSACTIONS: 'sonorecall_refund_transactions',
+  REFERRAL_PROGRAM_CONFIG: 'sonorecall_referral_program_config',
+  CUSTOMER_REFERRAL_CODES: 'sonorecall_customer_referral_codes',
+  REFERRAL_RELATIONSHIPS: 'sonorecall_referral_relationships',
+  REFERRAL_EVENTS: 'sonorecall_referral_events',
+  CAMPAIGN_TRIGGERS: 'sonorecall_campaign_triggers',
+  CAMPAIGN_MESSAGES: 'sonorecall_campaign_messages',
+  CUSTOMER_PREFERENCES: 'sonorecall_customer_preferences',
+  CAMPAIGN_QUEUE: 'sonorecall_campaign_queue',
 } as const;
 
 // Product storage functions
@@ -232,6 +254,67 @@ export const loadUpgradeCredits = (defaultCredits: UpgradeCredit[] = []): Upgrad
   return defaultCredits;
 };
 
+// Membership storage functions
+export const saveMembershipPlans = (plans: MembershipPlan[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.MEMBERSHIP_PLANS, JSON.stringify(plans));
+  } catch (error) {
+    console.error('Failed to save membership plans to localStorage:', error);
+  }
+};
+
+export const loadMembershipPlans = (defaultPlans: MembershipPlan[]): MembershipPlan[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.MEMBERSHIP_PLANS);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load membership plans from localStorage:', error);
+  }
+  return defaultPlans;
+};
+
+export const saveMemberSubscriptions = (memberships: MemberSubscription[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.MEMBER_SUBSCRIPTIONS, JSON.stringify(memberships));
+  } catch (error) {
+    console.error('Failed to save member subscriptions to localStorage:', error);
+  }
+};
+
+export const loadMemberSubscriptions = (defaultMemberships: MemberSubscription[] = []): MemberSubscription[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.MEMBER_SUBSCRIPTIONS);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load member subscriptions from localStorage:', error);
+  }
+  return defaultMemberships;
+};
+
+export const saveMembershipEvents = (events: MembershipEvent[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.MEMBERSHIP_EVENTS, JSON.stringify(events));
+  } catch (error) {
+    console.error('Failed to save membership events to localStorage:', error);
+  }
+};
+
+export const loadMembershipEvents = (defaultEvents: MembershipEvent[] = []): MembershipEvent[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.MEMBERSHIP_EVENTS);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load membership events from localStorage:', error);
+  }
+  return defaultEvents;
+};
+
 // Import history storage functions
 export const saveImportHistory = (history: ImportMetadata[]): void => {
   try {
@@ -326,6 +409,168 @@ export const loadRefundTransactions = (): RefundTransaction[] => {
     console.error('Failed to load refund transactions from localStorage:', error);
   }
   return [];
+};
+
+// Referral program storage functions
+export const saveReferralProgramConfig = (config: ReferralProgramConfig): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.REFERRAL_PROGRAM_CONFIG, JSON.stringify(config));
+  } catch (error) {
+    console.error('Failed to save referral program config to localStorage:', error);
+  }
+};
+
+export const loadReferralProgramConfig = (defaultConfig: ReferralProgramConfig): ReferralProgramConfig => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.REFERRAL_PROGRAM_CONFIG);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load referral program config from localStorage:', error);
+  }
+  return defaultConfig;
+};
+
+export const saveCustomerReferralCodes = (codes: CustomerReferralCode[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CUSTOMER_REFERRAL_CODES, JSON.stringify(codes));
+  } catch (error) {
+    console.error('Failed to save customer referral codes to localStorage:', error);
+  }
+};
+
+export const loadCustomerReferralCodes = (defaultCodes: CustomerReferralCode[] = []): CustomerReferralCode[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.CUSTOMER_REFERRAL_CODES);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load customer referral codes from localStorage:', error);
+  }
+  return defaultCodes;
+};
+
+export const saveReferralRelationships = (relationships: ReferralRelationship[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.REFERRAL_RELATIONSHIPS, JSON.stringify(relationships));
+  } catch (error) {
+    console.error('Failed to save referral relationships to localStorage:', error);
+  }
+};
+
+export const loadReferralRelationships = (defaultRelationships: ReferralRelationship[] = []): ReferralRelationship[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.REFERRAL_RELATIONSHIPS);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load referral relationships from localStorage:', error);
+  }
+  return defaultRelationships;
+};
+
+export const saveReferralEvents = (events: ReferralEvent[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.REFERRAL_EVENTS, JSON.stringify(events));
+  } catch (error) {
+    console.error('Failed to save referral events to localStorage:', error);
+  }
+};
+
+export const loadReferralEvents = (defaultEvents: ReferralEvent[] = []): ReferralEvent[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.REFERRAL_EVENTS);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load referral events from localStorage:', error);
+  }
+  return defaultEvents;
+};
+
+// CRM Campaign storage functions
+export const saveCampaignTriggers = (triggers: CampaignTriggerConfig[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CAMPAIGN_TRIGGERS, JSON.stringify(triggers));
+  } catch (error) {
+    console.error('Failed to save campaign triggers to localStorage:', error);
+  }
+};
+
+export const loadCampaignTriggers = (defaultTriggers: CampaignTriggerConfig[] = []): CampaignTriggerConfig[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.CAMPAIGN_TRIGGERS);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load campaign triggers from localStorage:', error);
+  }
+  return defaultTriggers;
+};
+
+export const saveCampaignMessages = (messages: CampaignMessage[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CAMPAIGN_MESSAGES, JSON.stringify(messages));
+  } catch (error) {
+    console.error('Failed to save campaign messages to localStorage:', error);
+  }
+};
+
+export const loadCampaignMessages = (defaultMessages: CampaignMessage[] = []): CampaignMessage[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.CAMPAIGN_MESSAGES);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load campaign messages from localStorage:', error);
+  }
+  return defaultMessages;
+};
+
+export const saveCustomerPreferences = (preferences: CustomerCommunicationPreferences[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CUSTOMER_PREFERENCES, JSON.stringify(preferences));
+  } catch (error) {
+    console.error('Failed to save customer preferences to localStorage:', error);
+  }
+};
+
+export const loadCustomerPreferences = (defaultPreferences: CustomerCommunicationPreferences[] = []): CustomerCommunicationPreferences[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.CUSTOMER_PREFERENCES);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load customer preferences from localStorage:', error);
+  }
+  return defaultPreferences;
+};
+
+export const saveCampaignQueue = (queue: CampaignQueueItem[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CAMPAIGN_QUEUE, JSON.stringify(queue));
+  } catch (error) {
+    console.error('Failed to save campaign queue to localStorage:', error);
+  }
+};
+
+export const loadCampaignQueue = (defaultQueue: CampaignQueueItem[] = []): CampaignQueueItem[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.CAMPAIGN_QUEUE);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load campaign queue from localStorage:', error);
+  }
+  return defaultQueue;
 };
 
 export const clearStorage = (): void => {

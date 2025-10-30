@@ -34,22 +34,6 @@ import {
   AccountCredit,
   CreditLedgerEntry,
   RefundTransaction,
-  MembershipPlan,
-  MemberSubscription,
-  MembershipEvent,
-  MembershipCreditBalance,
-  MembershipPlanInput,
-  MembershipEnrollmentPayload,
-  MembershipPaymentAttemptOptions,
-  MembershipCancellationPayload,
-  ReferralProgramConfig,
-  CustomerReferralCode,
-  ReferralRelationship,
-  ReferralEvent,
-  CampaignTriggerConfig,
-  CampaignMessage,
-  CustomerCommunicationPreferences,
-  CampaignQueueItem,
 } from './types';
 import {
   mockUpcomingAppointments,
@@ -66,17 +50,6 @@ import {
   mockScaledOffers,
   mockDownsellRules,
   mockUpgradeCredits,
-  mockMembershipPlans,
-  mockMemberSubscriptions,
-  mockMembershipEvents,
-  mockReferralProgramConfig,
-  mockCustomerReferralCodes,
-  mockReferralRelationships,
-  mockReferralEvents,
-  mockCampaignTriggers,
-  mockCampaignMessages,
-  mockCustomerPreferences,
-  mockCampaignQueue,
 } from './constants';
 import { geminiService } from './services/geminiService';
 import { DashboardIcon, RecallIcon, CommsIcon, AnalyticsIcon, SettingsIcon, StarIcon, CalendarIcon, CheckCircleIcon, ErrorIcon, PhotoIcon, VideoIcon, SyncIcon, ProductIcon, GiftIcon } from './components/Icons';
@@ -105,44 +78,11 @@ import {
   loadCreditLedger,
   saveRefundTransactions,
   loadRefundTransactions,
-  saveMembershipPlans,
-  loadMembershipPlans,
-  saveMemberSubscriptions,
-  loadMemberSubscriptions,
-  saveMembershipEvents,
-  loadMembershipEvents,
-  saveReferralProgramConfig,
-  loadReferralProgramConfig,
-  saveCustomerReferralCodes,
-  loadCustomerReferralCodes,
-  saveReferralRelationships,
-  loadReferralRelationships,
-  saveReferralEvents,
-  loadReferralEvents,
-  saveCampaignTriggers,
-  loadCampaignTriggers,
-  saveCampaignMessages,
-  loadCampaignMessages,
-  saveCustomerPreferences,
-  loadCustomerPreferences,
-  saveCampaignQueue,
-  loadCampaignQueue,
 } from './utils/storage';
 import { evaluateUpsells, buildCartContext } from './utils/upsells';
 import { evaluateDownsells, buildDownsellContext, calculatePaymentSchedule } from './utils/downsells';
-import { getAvailableMembershipCredits } from './utils/memberships';
-import {
-  generateReferralCode,
-  validateReferralCode,
-  performFraudChecks,
-  calculateRefereeIncentive,
-  calculateReferralMetrics,
-  createReferralEvent,
-} from './utils/referrals';
-import MembershipsView from './components/MembershipsView';
-import CRMAutomationView from './components/CRMAutomationView';
 
-type View = 'dashboard' | 'recalls' | 'communications' | 'analytics' | 'media-studio' | 'settings' | 'products' | 'bundles-promotions' | 'memberships' | 'referrals' | 'credit-management' | 'crm-automation';
+type View = 'dashboard' | 'recalls' | 'communications' | 'analytics' | 'media-studio' | 'settings' | 'products' | 'bundles-promotions' | 'credit-management';
 type NotificationType = { message: string; type: 'success' | 'error' };
 
 const defaultServices: ClinicService[] = [
@@ -174,17 +114,6 @@ const App: React.FC = () => {
   const [accountCredits, setAccountCredits] = useState<AccountCredit[]>([]);
   const [creditLedger, setCreditLedger] = useState<CreditLedgerEntry[]>([]);
   const [refundTransactions, setRefundTransactions] = useState<RefundTransaction[]>([]);
-  const [membershipPlans, setMembershipPlans] = useState<MembershipPlan[]>([]);
-  const [memberSubscriptions, setMemberSubscriptions] = useState<MemberSubscription[]>([]);
-  const [membershipEvents, setMembershipEvents] = useState<MembershipEvent[]>([]);
-  const [referralProgramConfig, setReferralProgramConfig] = useState<ReferralProgramConfig | null>(null);
-  const [customerReferralCodes, setCustomerReferralCodes] = useState<CustomerReferralCode[]>([]);
-  const [referralRelationships, setReferralRelationships] = useState<ReferralRelationship[]>([]);
-  const [referralEvents, setReferralEvents] = useState<ReferralEvent[]>([]);
-  const [campaignTriggers, setCampaignTriggers] = useState<CampaignTriggerConfig[]>([]);
-  const [campaignMessages, setCampaignMessages] = useState<CampaignMessage[]>([]);
-  const [customerPreferences, setCustomerPreferences] = useState<CustomerCommunicationPreferences[]>([]);
-  const [campaignQueue, setCampaignQueue] = useState<CampaignQueueItem[]>([]);
 
   const [isFeedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [feedbackState, setFeedbackState] = useState<{ appointmentId: number | null; patientName: string | null }>({ appointmentId: null, patientName: null });
@@ -244,39 +173,6 @@ const App: React.FC = () => {
 
     const loadedRefundTransactions = loadRefundTransactions();
     setRefundTransactions(loadedRefundTransactions);
-
-    const loadedMembershipPlans = loadMembershipPlans(mockMembershipPlans);
-    setMembershipPlans(loadedMembershipPlans);
-
-    const loadedMemberSubscriptions = loadMemberSubscriptions(mockMemberSubscriptions);
-    setMemberSubscriptions(loadedMemberSubscriptions);
-
-    const loadedMembershipEvents = loadMembershipEvents(mockMembershipEvents);
-    setMembershipEvents(loadedMembershipEvents);
-
-    const loadedReferralConfig = loadReferralProgramConfig(mockReferralProgramConfig);
-    setReferralProgramConfig(loadedReferralConfig);
-
-    const loadedCustomerCodes = loadCustomerReferralCodes(mockCustomerReferralCodes);
-    setCustomerReferralCodes(loadedCustomerCodes);
-
-    const loadedReferralRelationships = loadReferralRelationships(mockReferralRelationships);
-    setReferralRelationships(loadedReferralRelationships);
-
-    const loadedReferralEvents = loadReferralEvents(mockReferralEvents);
-    setReferralEvents(loadedReferralEvents);
-
-    const loadedCampaignTriggers = loadCampaignTriggers(mockCampaignTriggers);
-    setCampaignTriggers(loadedCampaignTriggers);
-
-    const loadedCampaignMessages = loadCampaignMessages(mockCampaignMessages);
-    setCampaignMessages(loadedCampaignMessages);
-
-    const loadedCustomerPreferences = loadCustomerPreferences(mockCustomerPreferences);
-    setCustomerPreferences(loadedCustomerPreferences);
-
-    const loadedCampaignQueue = loadCampaignQueue(mockCampaignQueue);
-    setCampaignQueue(loadedCampaignQueue);
 
     const loadedAppointments = loadAppointments(mockUpcomingAppointments, mockRecentAppointments);
     setUpcomingAppointments(loadedAppointments.upcoming);
@@ -344,68 +240,6 @@ const App: React.FC = () => {
   useEffect(() => {
     saveRefundTransactions(refundTransactions);
   }, [refundTransactions]);
-
-  useEffect(() => {
-    saveMembershipPlans(membershipPlans);
-  }, [membershipPlans]);
-
-  useEffect(() => {
-    saveMemberSubscriptions(memberSubscriptions);
-  }, [memberSubscriptions]);
-
-  useEffect(() => {
-    saveMembershipEvents(membershipEvents);
-  }, [membershipEvents]);
-
-  useEffect(() => {
-    if (referralProgramConfig) {
-      saveReferralProgramConfig(referralProgramConfig);
-    }
-  }, [referralProgramConfig]);
-
-  useEffect(() => {
-    saveCustomerReferralCodes(customerReferralCodes);
-  }, [customerReferralCodes]);
-
-  useEffect(() => {
-    saveReferralRelationships(referralRelationships);
-  }, [referralRelationships]);
-
-  useEffect(() => {
-    saveReferralEvents(referralEvents);
-  }, [referralEvents]);
-
-  useEffect(() => {
-    saveCampaignTriggers(campaignTriggers);
-  }, [campaignTriggers]);
-
-  useEffect(() => {
-    saveCampaignMessages(campaignMessages);
-  }, [campaignMessages]);
-
-  useEffect(() => {
-    saveCustomerPreferences(customerPreferences);
-  }, [customerPreferences]);
-
-  useEffect(() => {
-    saveCampaignQueue(campaignQueue);
-  }, [campaignQueue]);
-
-  // Calculate membership credit balances from subscriptions and plans
-  const membershipCreditBalances = useMemo<MembershipCreditBalance[]>(() => {
-    return memberSubscriptions.map(subscription => {
-      const plan = membershipPlans.find(p => p.id === subscription.planId);
-      const availableCredits = getAvailableMembershipCredits(subscription);
-      return {
-        subscriptionId: subscription.id,
-        patientName: subscription.patientName,
-        planName: plan?.name || 'Unknown Plan',
-        currentPeriodCredits: subscription.currentPeriodCredits,
-        carriedOverCredits: subscription.carriedOverCredits,
-        totalAvailableCredits: availableCredits,
-      };
-    });
-  }, [memberSubscriptions, membershipPlans]);
 
   // Save appointments to localStorage whenever they change
   useEffect(() => {
@@ -529,7 +363,6 @@ const App: React.FC = () => {
       appliedCredits?: UpgradeCredit[];
       issuedCredits?: UpgradeCredit[];
       appliedAccountCredits?: Array<{ creditId: number; amount: number }>;
-      referralRelationshipId?: number;
     }
   ) => {
       const appliedCredits = bookingMeta?.appliedCredits ?? [];
@@ -640,11 +473,6 @@ const App: React.FC = () => {
             : recall
         )
       );
-
-      // Complete referral if there's a relationship
-      if (bookingMeta?.referralRelationshipId) {
-        handleCompleteReferral(bookingMeta.referralRelationshipId, newAppointment.id, finalTotal);
-      }
 
       setBookingModalOpen(false);
       setNotification({ message: `Appointment for ${patientName} confirmed! (Total: £${finalTotal.toFixed(2)})`, type: 'success' });
@@ -813,456 +641,6 @@ const App: React.FC = () => {
     setNotification({ message: 'Scaled offer status updated!', type: 'success' });
   };
 
-  // Membership handler functions
-  const handleSaveMembershipPlan = (planInput: MembershipPlanInput) => {
-    if (planInput.id) {
-      // Update existing plan
-      setMembershipPlans(prev => prev.map(plan =>
-        plan.id === planInput.id ? { ...plan, ...planInput, id: plan.id } : plan
-      ));
-      setNotification({ message: 'Membership plan updated successfully!', type: 'success' });
-    } else {
-      // Create new plan
-      const newPlan: MembershipPlan = {
-        ...planInput,
-        id: Date.now(),
-        active: planInput.active !== undefined ? planInput.active : true,
-      };
-      setMembershipPlans(prev => [...prev, newPlan]);
-      setNotification({ message: 'Membership plan created successfully!', type: 'success' });
-    }
-  };
-
-  const handleToggleMembershipPlanStatus = (planId: number) => {
-    setMembershipPlans(prev => prev.map(plan =>
-      plan.id === planId ? { ...plan, active: !plan.active } : plan
-    ));
-    setNotification({ message: 'Membership plan status updated!', type: 'success' });
-  };
-
-  const handleEnrollMember = (enrollment: MembershipEnrollmentPayload) => {
-    const plan = membershipPlans.find(p => p.id === enrollment.planId);
-    if (!plan) {
-      setNotification({ message: 'Membership plan not found!', type: 'error' });
-      return;
-    }
-
-    // Calculate first renewal date based on billing interval
-    const today = new Date();
-    const nextRenewalDate = new Date(today);
-    switch (plan.billingInterval) {
-      case 'every_4_weeks':
-        nextRenewalDate.setDate(nextRenewalDate.getDate() + 28);
-        break;
-      case 'monthly':
-        nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1);
-        break;
-      case 'quarterly':
-        nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 3);
-        break;
-      case 'annually':
-        nextRenewalDate.setFullYear(nextRenewalDate.getFullYear() + 1);
-        break;
-    }
-
-    // Create new subscription
-    const newSubscription: MemberSubscription = {
-      id: Date.now(),
-      patientName: enrollment.patientName,
-      planId: enrollment.planId,
-      status: 'active',
-      enrolledAt: today.toISOString(),
-      nextRenewalDate: nextRenewalDate.toISOString(),
-      currentPeriodCredits: plan.includedServiceCredits + (plan.signupBonus || 0),
-      carriedOverCredits: 0,
-      cycleNumber: 1,
-      commitmentEndDate: enrollment.minimumTermMonths
-        ? new Date(today.setMonth(today.getMonth() + enrollment.minimumTermMonths)).toISOString()
-        : undefined,
-      paymentMethodId: enrollment.paymentMethodId,
-      backupPaymentMethodId: enrollment.backupPaymentMethodId,
-      signupFeeWaived: enrollment.signupFeeWaived || false,
-    };
-
-    setMemberSubscriptions(prev => [...prev, newSubscription]);
-
-    // Create enrollment event
-    const enrollmentEvent: MembershipEvent = {
-      id: Date.now(),
-      subscriptionId: newSubscription.id,
-      type: 'enrolled',
-      timestamp: today.toISOString(),
-      data: {
-        planId: plan.id,
-        planName: plan.name,
-        signupFee: enrollment.signupFeeWaived ? 0 : (plan.signupFee || 0),
-        signupBonus: plan.signupBonus || 0,
-      },
-    };
-
-    setMembershipEvents(prev => [...prev, enrollmentEvent]);
-    setNotification({ message: `${enrollment.patientName} enrolled successfully!`, type: 'success' });
-  };
-
-  const handleProcessMembershipPayment = (options: MembershipPaymentAttemptOptions) => {
-    const subscription = memberSubscriptions.find(s => s.id === options.subscriptionId);
-    if (!subscription) {
-      setNotification({ message: 'Subscription not found!', type: 'error' });
-      return;
-    }
-
-    const plan = membershipPlans.find(p => p.id === subscription.planId);
-    if (!plan) {
-      setNotification({ message: 'Membership plan not found!', type: 'error' });
-      return;
-    }
-
-    // Create payment event
-    const paymentEvent: MembershipEvent = {
-      id: Date.now(),
-      subscriptionId: subscription.id,
-      type: options.success ? 'renewed' : 'payment_failed',
-      timestamp: new Date().toISOString(),
-      data: {
-        amount: options.amount,
-        paymentMethodId: options.paymentMethodId,
-        failureReason: options.failureReason,
-        retryAttempt: options.retryAttempt,
-      },
-    };
-
-    setMembershipEvents(prev => [...prev, paymentEvent]);
-
-    if (options.success) {
-      // Calculate next renewal date
-      const nextRenewal = new Date(subscription.nextRenewalDate);
-      switch (plan.billingInterval) {
-        case 'every_4_weeks':
-          nextRenewal.setDate(nextRenewal.getDate() + 28);
-          break;
-        case 'monthly':
-          nextRenewal.setMonth(nextRenewal.getMonth() + 1);
-          break;
-        case 'quarterly':
-          nextRenewal.setMonth(nextRenewal.getMonth() + 3);
-          break;
-        case 'annually':
-          nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
-          break;
-      }
-
-      // Apply carryover rules
-      let newCurrentCredits = plan.includedServiceCredits;
-      let newCarriedOver = 0;
-
-      const unusedCredits = subscription.currentPeriodCredits + subscription.carriedOverCredits;
-      if (plan.creditCarryoverRule === 'one_period') {
-        newCarriedOver = Math.min(unusedCredits, plan.includedServiceCredits);
-      } else if (plan.creditCarryoverRule === 'unlimited') {
-        newCarriedOver = unusedCredits;
-      }
-
-      // Update subscription
-      setMemberSubscriptions(prev => prev.map(sub =>
-        sub.id === subscription.id
-          ? {
-              ...sub,
-              status: 'active',
-              nextRenewalDate: nextRenewal.toISOString(),
-              currentPeriodCredits: newCurrentCredits,
-              carriedOverCredits: newCarriedOver,
-              cycleNumber: sub.cycleNumber + 1,
-            }
-          : sub
-      ));
-
-      setNotification({ message: 'Membership renewed successfully!', type: 'success' });
-    } else {
-      // Mark as past_due
-      setMemberSubscriptions(prev => prev.map(sub =>
-        sub.id === subscription.id ? { ...sub, status: 'past_due' } : sub
-      ));
-      setNotification({ message: 'Payment failed - subscription marked past due', type: 'error' });
-    }
-  };
-
-  const handleCancelMembership = (cancellation: MembershipCancellationPayload) => {
-    const subscription = memberSubscriptions.find(s => s.id === cancellation.subscriptionId);
-    if (!subscription) {
-      setNotification({ message: 'Subscription not found!', type: 'error' });
-      return;
-    }
-
-    const plan = membershipPlans.find(p => p.id === subscription.planId);
-    let cancellationFee = 0;
-
-    // Check if early cancellation fee applies
-    if (subscription.commitmentEndDate && plan?.earlyCancellationFee) {
-      const commitmentEnd = new Date(subscription.commitmentEndDate);
-      if (new Date() < commitmentEnd) {
-        cancellationFee = plan.earlyCancellationFee;
-      }
-    }
-
-    // Update subscription status
-    setMemberSubscriptions(prev => prev.map(sub =>
-      sub.id === subscription.id
-        ? { ...sub, status: 'cancelled', cancelledAt: new Date().toISOString() }
-        : sub
-    ));
-
-    // Create cancellation event
-    const cancellationEvent: MembershipEvent = {
-      id: Date.now(),
-      subscriptionId: subscription.id,
-      type: 'cancelled',
-      timestamp: new Date().toISOString(),
-      data: {
-        reason: cancellation.reason,
-        cancellationFee,
-        refundIssued: cancellation.refundIssued,
-      },
-    };
-
-    setMembershipEvents(prev => [...prev, cancellationEvent]);
-    setNotification({
-      message: `Membership cancelled${cancellationFee > 0 ? ` (cancellation fee: ${formatCurrency(cancellationFee)})` : ''}`,
-      type: 'success'
-    });
-  };
-
-  // Referral handler functions
-  const handleUpdateReferralConfig = (config: ReferralProgramConfig) => {
-    setReferralProgramConfig(config);
-    setNotification({ message: 'Referral program updated successfully!', type: 'success' });
-  };
-
-  const handleGenerateReferralCode = (customerName: string, customerEmail?: string, customerPhone?: string) => {
-    const code = generateReferralCode(customerName);
-    const newReferralCode: CustomerReferralCode = {
-      id: Date.now(),
-      customerName,
-      customerEmail,
-      customerPhone,
-      referralCode: code,
-      createdAt: new Date().toISOString(),
-      expiresAt: referralProgramConfig?.expiryDays
-        ? new Date(Date.now() + referralProgramConfig.expiryDays * 24 * 60 * 60 * 1000).toISOString()
-        : undefined,
-      active: true,
-      totalReferrals: 0,
-      totalRewardsEarned: 0,
-    };
-
-    setCustomerReferralCodes(prev => [...prev, newReferralCode]);
-    setNotification({ message: `Referral code ${code} created!`, type: 'success' });
-    return newReferralCode;
-  };
-
-  const handleApplyReferralCode = (
-    code: string,
-    refereeName: string,
-    cartTotal: number,
-    refereeEmail?: string,
-    refereePhone?: string
-  ): { success: boolean; discount: number; message: string; relationship?: ReferralRelationship } => {
-    if (!referralProgramConfig?.enabled) {
-      return { success: false, discount: 0, message: 'Referral program is not active' };
-    }
-
-    const validation = validateReferralCode(code, customerReferralCodes, referralProgramConfig);
-    if (!validation.valid || !validation.referralCode) {
-      return { success: false, discount: 0, message: validation.error || 'Invalid code' };
-    }
-
-    // Fraud checks
-    const fraudCheck = performFraudChecks(
-      validation.referralCode,
-      refereeName,
-      refereeEmail,
-      refereePhone,
-      referralProgramConfig,
-      referralRelationships
-    );
-
-    if (!fraudCheck.passed) {
-      return { success: false, discount: 0, message: fraudCheck.notes || 'Fraud check failed' };
-    }
-
-    // Calculate incentive
-    const incentive = calculateRefereeIncentive(cartTotal, referralProgramConfig);
-    if (!incentive.valid) {
-      return { success: false, discount: 0, message: incentive.message };
-    }
-
-    // Create relationship
-    const relationship: ReferralRelationship = {
-      id: Date.now(),
-      referrerCode: code,
-      referrerName: validation.referralCode.customerName,
-      refereeName,
-      refereeEmail,
-      refereePhone,
-      referredAt: new Date().toISOString(),
-      status: 'pending',
-      refereeIncentiveApplied: {
-        type: referralProgramConfig.refereeIncentiveType,
-        value: incentive.discount,
-      },
-      fraudChecksPassed: true,
-    };
-
-    setReferralRelationships(prev => [...prev, relationship]);
-
-    // Create event
-    const event = createReferralEvent(relationship.id, 'code_applied', { code, discount: incentive.discount });
-    setReferralEvents(prev => [...prev, event]);
-
-    return { success: true, discount: incentive.discount, message: incentive.message, relationship };
-  };
-
-  const handleCompleteReferral = (
-    relationshipId: number,
-    appointmentId: number,
-    purchaseAmount: number
-  ) => {
-    const relationship = referralRelationships.find(r => r.id === relationshipId);
-    if (!relationship || !referralProgramConfig) return;
-
-    // Update relationship
-    setReferralRelationships(prev => prev.map(r =>
-      r.id === relationshipId
-        ? {
-            ...r,
-            status: 'completed',
-            appointmentId,
-            purchaseAmount,
-            completedAt: new Date().toISOString(),
-          }
-        : r
-    ));
-
-    // Create events
-    const purchaseEvent = createReferralEvent(relationshipId, 'purchase_completed', {
-      appointmentId,
-      amount: purchaseAmount,
-    });
-    setReferralEvents(prev => [...prev, purchaseEvent]);
-
-    // Issue referrer reward if configured to do so
-    if (referralProgramConfig.requireCompletedPurchase) {
-      handleIssueReferrerReward(relationshipId);
-    }
-  };
-
-  const handleIssueReferrerReward = (relationshipId: number) => {
-    const relationship = referralRelationships.find(r => r.id === relationshipId);
-    if (!relationship || !referralProgramConfig) return;
-
-    const referrerCode = customerReferralCodes.find(c => c.referralCode === relationship.referrerCode);
-    if (!referrerCode) return;
-
-    // Issue reward based on type
-    if (referralProgramConfig.referrerRewardType === 'account_credit') {
-      // Create account credit
-      const creditId = Date.now();
-      const newCredit: AccountCredit = {
-        id: creditId,
-        patientName: referrerCode.customerName,
-        patientEmail: referrerCode.customerEmail,
-        originalAmount: referralProgramConfig.referrerRewardValue,
-        remainingAmount: referralProgramConfig.referrerRewardValue,
-        source: 'referral',
-        sourceReference: `Referral reward for ${relationship.refereeName}`,
-        issuedAt: new Date().toISOString(),
-        expiresAt: undefined,
-        status: 'active',
-        allowedCategories: ['all'],
-      };
-
-      const ledgerEntry: CreditLedgerEntry = {
-        id: Date.now() + 1,
-        creditId: creditId,
-        type: 'issued',
-        amount: referralProgramConfig.referrerRewardValue,
-        balanceBefore: 0,
-        balanceAfter: referralProgramConfig.referrerRewardValue,
-        timestamp: new Date().toISOString(),
-        performedBy: 'system',
-        notes: 'Referral program reward',
-      };
-
-      setAccountCredits(prev => [...prev, newCredit]);
-      setCreditLedger(prev => [...prev, ledgerEntry]);
-
-      // Update relationship
-      setReferralRelationships(prev => prev.map(r =>
-        r.id === relationshipId
-          ? {
-              ...r,
-              status: 'rewarded',
-              referrerRewardIssued: {
-                type: referralProgramConfig.referrerRewardType,
-                value: referralProgramConfig.referrerRewardValue,
-                creditId: creditId,
-              },
-              rewardedAt: new Date().toISOString(),
-            }
-          : r
-      ));
-
-      // Update referrer code stats
-      setCustomerReferralCodes(prev => prev.map(c =>
-        c.referralCode === relationship.referrerCode
-          ? {
-              ...c,
-              totalReferrals: c.totalReferrals + 1,
-              totalRewardsEarned: c.totalRewardsEarned + referralProgramConfig.referrerRewardValue,
-            }
-          : c
-      ));
-
-      // Create event
-      const rewardEvent = createReferralEvent(relationshipId, 'referrer_rewarded', {
-        creditId: creditId,
-        amount: referralProgramConfig.referrerRewardValue,
-      });
-      setReferralEvents(prev => [...prev, rewardEvent]);
-
-      setNotification({
-        message: `Referral reward of £${referralProgramConfig.referrerRewardValue} issued to ${referrerCode.customerName}`,
-        type: 'success',
-      });
-    }
-  };
-
-  // CRM Automation handler functions
-  const handleUpdateCampaignTrigger = (trigger: CampaignTriggerConfig) => {
-    setCampaignTriggers(prev => prev.map(t => t.id === trigger.id ? trigger : t));
-    setNotification({ message: 'Campaign trigger updated successfully!', type: 'success' });
-  };
-
-  const handleToggleCampaignTriggerStatus = (triggerId: number) => {
-    setCampaignTriggers(prev => prev.map(t =>
-      t.id === triggerId ? { ...t, enabled: !t.enabled } : t
-    ));
-    const trigger = campaignTriggers.find(t => t.id === triggerId);
-    setNotification({
-      message: `Campaign trigger ${trigger?.enabled ? 'disabled' : 'enabled'} successfully!`,
-      type: 'success',
-    });
-  };
-
-  const handleUpdateCustomerPreferences = (preferences: CustomerCommunicationPreferences) => {
-    setCustomerPreferences(prev => prev.map(p => p.id === preferences.id ? preferences : p));
-    setNotification({ message: 'Customer preferences updated successfully!', type: 'success' });
-  };
-
-  const handleRemoveFromCampaignQueue = (queueItemId: number) => {
-    setCampaignQueue(prev => prev.filter(item => item.id !== queueItemId));
-    setNotification({ message: 'Message removed from queue', type: 'success' });
-  };
-
   const renderView = () => {
     switch (currentView) {
       case 'dashboard':
@@ -1299,33 +677,6 @@ const App: React.FC = () => {
             onToggleScaledOfferStatus={handleToggleScaledOfferStatus}
           />
         );
-      case 'memberships':
-        return (
-          <MembershipsView
-            membershipPlans={membershipPlans}
-            memberSubscriptions={memberSubscriptions}
-            membershipEvents={membershipEvents}
-            creditBalances={membershipCreditBalances}
-            onSavePlan={handleSaveMembershipPlan}
-            onTogglePlanStatus={handleToggleMembershipPlanStatus}
-            onEnrollMember={handleEnrollMember}
-            onProcessPaymentAttempt={handleProcessMembershipPayment}
-            onCancelMembership={handleCancelMembership}
-          />
-        );
-      case 'referrals':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800">Referral Program</h2>
-              <p className="text-sm text-gray-600 mt-1">Manage referral codes, track relationships, and analyze performance</p>
-            </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-yellow-800 font-semibold">ReferralsView component will be created next</p>
-              <p className="text-yellow-700 text-sm mt-1">State and handlers are ready. BookingModal integration pending.</p>
-            </div>
-          </div>
-        );
       case 'credit-management':
         return (
           <CreditManagementView
@@ -1335,19 +686,6 @@ const App: React.FC = () => {
             onIssueCredit={handleIssueCredit}
             onAdjustCredit={handleAdjustCredit}
             onRevokeCredit={handleRevokeCredit}
-          />
-        );
-      case 'crm-automation':
-        return (
-          <CRMAutomationView
-            campaignTriggers={campaignTriggers}
-            campaignMessages={campaignMessages}
-            customerPreferences={customerPreferences}
-            campaignQueue={campaignQueue}
-            onUpdateTrigger={handleUpdateCampaignTrigger}
-            onToggleTriggerStatus={handleToggleCampaignTriggerStatus}
-            onUpdatePreferences={handleUpdateCustomerPreferences}
-            onRemoveFromQueue={handleRemoveFromCampaignQueue}
           />
         );
       default:
@@ -1380,12 +718,6 @@ const App: React.FC = () => {
           downsellRules={downsellRules}
           upgradeCredits={upgradeCredits}
           accountCredits={accountCredits}
-          memberSubscriptions={memberSubscriptions}
-          membershipCreditBalances={membershipCreditBalances}
-          membershipPlans={membershipPlans}
-          referralProgramConfig={referralProgramConfig}
-          customerReferralCodes={customerReferralCodes}
-          onApplyReferralCode={handleApplyReferralCode}
           onClose={() => setBookingModalOpen(false)}
           onBook={handleBookAppointment}
         />
@@ -1433,16 +765,9 @@ const Sidebar: React.FC<{ currentView: View; setCurrentView: (view: View) => voi
     { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon /> },
     { id: 'products', label: 'Products', icon: <ProductIcon /> },
     { id: 'bundles-promotions', label: 'Bundles & Promos', icon: <GiftIcon /> },
-    { id: 'memberships', label: 'Memberships', icon: <StarIcon /> },
-    { id: 'referrals', label: 'Referrals', icon: <GiftIcon /> },
     { id: 'credit-management', label: 'Credits', icon: (
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ) },
-    { id: 'crm-automation', label: 'CRM Automation', icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
       </svg>
     ) },
     { id: 'media-studio', label: 'Media Studio', icon: <PhotoIcon /> },
